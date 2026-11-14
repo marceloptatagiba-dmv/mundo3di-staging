@@ -214,7 +214,7 @@
 
   /* ---------- Funcionamento offline ---------- */
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js'); });
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }); });
   }
 
   /* ---------- Início ---------- */

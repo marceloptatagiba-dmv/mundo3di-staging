@@ -69,7 +69,7 @@ Depois de instalado, abra uma vez com internet. A partir daí funciona em modo a
 ## Atualizar o app
 
 1. Altere os arquivos.
-2. Em `sw.js`, aumente a versão: `calc3di-v2` → `calc3di-v3`.
+2. Em `config-ambiente.js` do ambiente, aumente a `versaoCache` (`v2` → `v3`). Sem isso os celulares continuam com a versão antiga.
 3. Publique de novo. Os celulares recebem a atualização na próxima vez que abrirem o app com internet (às vezes é preciso fechar e abrir de novo).
 
 ## Testar no computador
