@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testes — Calculadora 3DI</title>
+<script src="config-ambiente.js"></script>
+<style>
+:root{--verde:#3D8203;--ok:#2E7D32;--aviso:#B45309;--falha:#B91C1C;--preto:#0E0F10;--fundo:#F4F6F2;--borda:#D5DCCF;--suave:#4A524A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--preto);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px}
+main{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+h1{margin:0;font-size:20px}
+h2{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--verde)}
+.faixa{background:#F59E0B;color:#000;font-weight:700;border-radius:10px;padding:8px 12px;font-size:14px}
+section{background:#fff;border-radius:14px;padding:14px 16px}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+li{display:grid;grid-template-columns:22px 1fr;gap:8px}
+li small{display:block;color:var(--suave);font-size:13px;word-break:break-word}
+.ok{color:var(--ok)}.aviso{color:var(--aviso)}.falha{color:var(--falha)}
+.sel{font-weight:800}
+button,a.btn{font:inherit;font-weight:700;min-height:44px;border-radius:12px;border:1.5px solid var(--borda);background:#fff;padding:0 14px;margin-top:10px;display:inline-flex;align-items:center;text-decoration:none;color:var(--preto)}
+a.btn.principal{background:var(--verde);border-color:var(--verde);color:#fff}
+input{font:inherit;font-size:20px;font-weight:700;width:100%;height:48px;border:1.5px solid var(--borda);border-radius:12px;padding:0 12px;background:#FAFBF8}
+pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--fundo);border-radius:8px;padding:8px}
+.falhas{margin-top:8px;font-size:13px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Testes da calculadora</h1>
+  <div class="faixa" id="amb">Carregando…</div>
+
+  <section>
+    <h2>1. Regras de cálculo</h2>
+    <ul id="l-calc"></ul>
+    <ul class="falhas" id="l-falhas"></ul>
+  </section>
+
+  <section>
+    <h2>2. Offline e atualização</h2>
+    <ul id="l-offline"></ul>
+    <p style="margin:10px 0 0;font-size:13px;color:var(--suave)">Para testar offline: instale, abra uma vez com internet, ative o modo avião e abra o app pelo ícone da tela inicial. O quadro “Online agora” muda sozinho.</p>
+  </section>
+
+  <section>
+    <h2>3. Este aparelho</h2>
+    <ul id="l-aparelho"></ul>
+    <button type="button" id="b-share">Testar compartilhamento</button>
+    <p id="r-share" style="margin:8px 0 0;font-size:13px;color:var(--suave)"></p>
+  </section>
+
+  <section>
+    <h2>4. Teclado do campo de tempo</h2>
+    <p style="margin:0 0 8px;font-size:13px;color:var(--suave)">Digite como no fatiador (2h35, 2:35, 155). O teclado precisa ter letras.</p>
+    <input id="t-tempo" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="2h35">
+    <p id="r-tempo" style="margin:8px 0 0;font-weight:700"></p>
+  </section>
+
+  <section>
+    <h2>5. Dados salvos neste ambiente</h2>
+    <pre id="d-dados"></pre>
+    <button type="button" id="b-limpar">Limpar dados de teste</button>
+  </section>
+
+  <a class="btn principal" href="index.html">Abrir a calculadora</a>
+</main>
+
+<script src="calc.js"></script>
+<script src="testes-casos.js"></script>
+<script>
+(function () {
+  'use strict';
+  var A = window.AMBIENTE_3DI;
+  var $ = function (id) { return document.getElementById(id); };
+  var ICONE = { ok: '✓', aviso: '!', falha: '✗' };
+  function linha(ul, estado, titulo, detalhe) {
+    var li = document.createElement('li');
+    var i = document.createElement('span'); i.className = 'sel ' + estado; i.textContent = ICONE[estado];
+    var d = document.createElement('div'); d.textContent = titulo;
+    if (detalhe) { var s = document.createElement('small'); s.textContent = detalhe; d.appendChild(s); }
+    li.appendChild(i); li.appendChild(d); ul.appendChild(li); return li;
+  }
+  $('amb').textContent = 'Ambiente: ' + A.nome + ' · cache ' + A.prefixoCache + '-v…';
+
+  // 1. cálculo
+  var res = window.Testes3DI.executar(window.Calc);
+  var falhas = res.filter(function (r) { return !r.ok; });
+  linha($('l-calc'), falhas.length ? 'falha' : 'ok', falhas.length ? falhas.length + ' de ' + res.length + ' casos falharam' : 'Todos os ' + res.length + ' casos passaram',
+    'Inclui o caso da planilha: 5 g, 10 min → R$ 2,36');
+  falhas.forEach(function (f) { linha($('l-falhas'), 'falha', f.nome, 'obtido ' + JSON.stringify(f.obtido) + ' · esperado ' + JSON.stringify(f.esperado)); });
+
+  // 2. offline
+  var lo = $('l-offline');
+  var temSW = 'serviceWorker' in navigator;
+  linha(lo, temSW ? 'ok' : 'falha', temSW ? 'Service worker suportado' : 'Service worker NÃO suportado (offline não funciona)');
+  var online = linha(lo, navigator.onLine ? 'ok' : 'aviso', 'Online agora: ' + (navigator.onLine ? 'sim' : 'não'));
+  function atualizarOnline() {
+    var on = navigator.onLine;
+    online.firstChild.className = 'sel ' + (on ? 'ok' : 'aviso'); online.firstChild.textContent = on ? ICONE.ok : ICONE.aviso;
+    online.lastChild.textContent = 'Online agora: ' + (on ? 'sim' : 'não');
+  }
+  window.addEventListener('online', atualizarOnline); window.addEventListener('offline', atualizarOnline);
+  if (temSW) {
+    var ctl = navigator.serviceWorker.controller;
+    linha(lo, ctl ? 'ok' : 'aviso', ctl ? 'Esta página é controlada pelo service worker' : 'Página ainda não controlada pelo service worker', ctl ? ctl.scriptURL : 'Abra a calculadora uma vez, espere e recarregue esta página.');
+    navigator.serviceWorker.getRegistration().then(function (reg) {
+      linha(lo, reg && reg.active ? 'ok' : 'aviso', reg && reg.active ? 'Service worker ativo' : 'Service worker ainda não ativo',
+        reg ? (reg.waiting ? 'Há uma versão nova aguardando: feche e abra o app.' : 'Sem versão pendente') : 'Nenhum registro: abra a calculadora uma vez.');
+    });
+  }
+  if (window.caches) {
+    caches.keys().then(function (nomes) {
+      var meus = nomes.filter(function (n) { return n.indexOf(A.prefixoCache + '-v') === 0; });
+      var outros = nomes.filter(function (n) { return meus.indexOf(n) === -1; });
+      if (!meus.length) { linha(lo, 'aviso', 'Nenhum cache deste ambiente ainda', 'Abra a calculadora uma vez com internet.'); }
+      meus.forEach(function (n) {
+        caches.open(n).then(function (c) { return c.keys(); }).then(function (k) { linha(lo, 'ok', 'Cache ' + n, k.length + ' arquivos guardados'); });
+      });
+      if (outros.length) linha(lo, 'ok', 'Caches de outros ambientes preservados', outros.join(', '));
+    });
+  }
+
+  // 3. aparelho
+  var la = $('l-aparelho');
+  var inst = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  linha(la, inst ? 'ok' : 'aviso', inst ? 'Aberto como app instalado' : 'Aberto no navegador (não instalado)');
+  var share = !!navigator.share;
+  linha(la, share ? 'ok' : 'aviso', share ? 'Compartilhamento nativo disponível' : 'Sem compartilhamento nativo (o app abre o WhatsApp pelo wa.me)');
+  linha(la, 'ok', 'Tela ' + innerWidth + '×' + innerHeight + ' px', navigator.userAgent);
+  $('b-share').addEventListener('click', function () {
+    var r = $('r-share');
+    if (!navigator.share) { r.textContent = 'Este navegador não tem compartilhamento nativo.'; return; }
+    navigator.share({ text: '*Orçamento — Mundo 3DI*\nTeste de compartilhamento' }).then(
+      function () { r.textContent = 'Compartilhado com sucesso.'; },
+      function (e) { r.textContent = (e && e.name === 'AbortError') ? 'Cancelado por você (normal).' : 'Erro: ' + (e && e.name); });
+  });
+
+  // 4. tempo
+  $('t-tempo').addEventListener('input', function () {
+    var min = window.Calc.lerTempo(this.value);
+    $('r-tempo').textContent = min ? '= ' + window.Calc.decimal(min, 0, 2) + ' min (' + window.Calc.formatarTempo(min) + ')' : '';
+  });
+
+  // 5. dados
+  function dados() {
+    var v = null; try { v = localStorage.getItem(A.chaveConfig); } catch (e) { v = 'armazenamento indisponível'; }
+    $('d-dados').textContent = A.chaveConfig + '\n' + (v || '(nada salvo: usando os padrões)');
+  }
+  dados();
+  $('b-limpar').addEventListener('click', function () {
+    try { localStorage.removeItem(A.chaveConfig); localStorage.removeItem(A.chaveConfig + '-instalar'); } catch (e) {}
+    dados();
+  });
+})();
+</script>
+</body>
+</html>

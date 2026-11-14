@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calculadora 3DI</title>
+<meta name="description" content="Calculadora de preços de peças impressas em 3D — Mundo 3DI">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Calc 3DI">
+<link rel="manifest" href="manifest.webmanifest">
+<script src="config-ambiente.js"></script>
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+@font-face{font-family:Montserrat;font-weight:500;font-display:swap;src:url(fonts/montserrat-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:Montserrat;font-weight:600;font-display:swap;src:url(fonts/montserrat-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:Montserrat;font-weight:700;font-display:swap;src:url(fonts/montserrat-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:Montserrat;font-weight:800;font-display:swap;src:url(fonts/montserrat-latin-800-normal.woff2) format("woff2")}
+
+:root{
+  --verde:#3D8203; --verde-texto:#3A7A03; --verde-claro:#7CC12A;
+  --preto:#0E0F10; --fundo:#F4F6F2; --campo:#FAFBF8; --borda:#D5DCCF; --linha:#E3E8DF;
+  --suave:#4A524A; --suave-escuro:#B9C2B3;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--fundo);color:var(--preto);font-family:Montserrat,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+.app{max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+.tela{display:flex;flex-direction:column;flex:1}
+.tela[hidden]{display:none}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border-bottom:1px solid var(--linha);
+  padding:calc(12px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) 12px calc(20px + env(safe-area-inset-left));position:sticky;top:0;z-index:2}
+.marca{display:flex;align-items:center;gap:12px}
+.marca img{height:46px;width:auto;display:block}
+.marca strong{display:block;font-size:15px;font-weight:800}
+.marca span{display:block;font-size:12px;font-weight:600;color:var(--suave)}
+.icone{width:44px;height:44px;border-radius:12px;border:1.5px solid var(--borda);background:#fff;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0}
+h1{margin:0;font-size:19px;font-weight:800;flex:1}
+
+main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left))}
+.cartao{background:#fff;border-radius:16px;padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.titulo-secao{margin:0;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--verde-texto)}
+.grade2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grade5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+
+.campo{display:flex;flex-direction:column;gap:6px}
+.campo[hidden]{display:none}
+.campo>span:first-child{font-size:12px;font-weight:600;color:var(--suave)}
+.cartao.config .campo>span:first-child{font-size:13px;font-weight:700;color:var(--preto)}
+.caixa{display:flex;align-items:center;gap:8px;height:48px;padding:0 14px;border:1.5px solid var(--borda);border-radius:12px;background:var(--campo)}
+.caixa:focus-within{border-color:var(--verde);box-shadow:0 0 0 3px rgba(61,130,3,.15)}
+.caixa input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-size:20px;font-weight:700;padding:0}
+.caixa small{font-size:14px;font-weight:600;color:var(--suave)}
+.caixa b{font-size:15px;font-weight:700;color:var(--suave)}
+.ajuda{font-size:12px;font-weight:500;color:var(--verde-texto)}
+.ajuda.neutra{color:var(--suave)}
+.cartao>.ajuda{margin:-4px 0 0}
+#d-unit{font-size:14px;font-weight:700;color:#fff}
+#d-unit[hidden]{display:none}
+.linha[hidden]{display:none}
+
+.atalho{height:44px;border-radius:10px;border:1.5px solid var(--borda);background:#fff;font-size:13px;font-weight:700;padding:0}
+.atalho[aria-pressed="true"]{border-color:var(--verde);background:var(--verde);color:#fff}
+
+.linhas{gap:10px;padding:14px 16px}
+.linha{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.linha .rot{display:flex;flex-direction:column;gap:2px}
+.linha .rot strong{font-size:14px;font-weight:600}
+.linha .rot span{font-size:12px;font-weight:500;color:var(--suave)}
+.linha .val{font-size:15px;font-weight:600;white-space:nowrap}
+.linha.forte .rot strong,.linha.forte .val{font-weight:700}
+.linha.total .rot strong{font-weight:800}
+.linha.total .val{font-size:16px;font-weight:800}
+.linha.suave .rot strong,.linha.suave .val{color:var(--suave)}
+.divisor{height:1px;background:var(--linha)}
+#tela-calc main{padding-bottom:14px}
+.detalhes{padding:0;gap:0}
+.detalhes summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;padding:0 16px;cursor:pointer}
+.detalhes summary::-webkit-details-marker{display:none}
+.detalhes .lucro{display:flex;align-items:baseline;gap:10px}
+.detalhes .lucro strong{font-size:14px;font-weight:700}
+.detalhes .lucro b{font-size:16px;font-weight:800}
+.detalhes .ver{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:700;color:var(--verde-texto)}
+.detalhes .chev{transition:transform .2s}
+.detalhes[open] .chev{transform:rotate(180deg)}
+.detalhes .corpo{display:flex;flex-direction:column;gap:10px;padding:2px 16px 14px;border-top:1px solid var(--linha);padding-top:12px}
+.detalhes .nota{margin:0;font-size:12px;font-weight:500;color:var(--suave)}
+.barra{position:sticky;bottom:0;z-index:3;background:rgba(244,246,242,.97);border-top:1px solid var(--linha);display:flex;flex-direction:column;gap:8px;
+  padding:10px calc(20px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left))}
+.barra .resultado{padding:12px 16px;border-radius:16px}
+.barra .resultado output{font-size:32px}
+.acoes{display:grid;grid-template-columns:1fr auto;gap:8px}
+.acoes .btn{height:48px;width:auto;padding:0 18px}
+.acoes .btn.principal{height:48px;font-size:16px;width:100%}
+#d-final[hidden]{display:none}
+
+.resultado{background:var(--preto);border-radius:18px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.resultado .rot{display:flex;flex-direction:column;gap:4px;min-width:0}
+.resultado .rot span{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--suave-escuro)}
+.resultado output{font-size:38px;font-weight:800;line-height:1.05;color:var(--verde-claro);overflow-wrap:anywhere}
+.resultado small{font-size:12px;font-weight:500;color:var(--suave-escuro)}
+.copiar{min-height:44px;padding:0 14px;border:0;border-radius:12px;background:var(--verde-claro);color:var(--preto);font-size:14px;font-weight:800;display:flex;align-items:center;gap:6px;flex-shrink:0}
+
+.btn{height:48px;border-radius:14px;border:1.5px solid var(--borda);background:#fff;font-size:15px;font-weight:700;width:100%}
+.btn.principal{height:54px;border:0;background:var(--verde);color:#fff;font-size:17px;font-weight:800}
+.espaco{flex:1}
+.intro{margin:0;font-size:13px;font-weight:500;line-height:1.5;color:var(--suave)}
+
+.instalar{background:#fff;border:1.5px solid var(--borda);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px;font-size:13px;line-height:1.45}
+.instalar[hidden]{display:none}
+.instalar p{margin:0;flex:1}
+.instalar .btn{width:auto;height:40px;padding:0 14px;font-size:14px}
+.fechar{background:none;border:0;width:44px;height:44px;margin:-10px -10px -10px 0;color:var(--suave)}
+
+.aviso{position:fixed;left:50%;top:calc(84px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-20px);background:var(--preto);color:#fff;font-size:14px;font-weight:700;
+  padding:12px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10}
+.aviso.ver{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TELA: CALCULADORA -->
+  <section class="tela" id="tela-calc" aria-label="Calculadora">
+    <header>
+      <div class="marca">
+        <img src="img/logo-3di.png" alt="3Di" width="77" height="46">
+        <div><strong>Mundo 3DI</strong><span>Calculadora de preços</span></div>
+      </div>
+      <button class="icone" type="button" id="ir-config" aria-label="Configurações">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </header>
+
+    <main>
+      <div class="instalar" id="instalar" hidden>
+        <p id="instalar-texto"></p>
+        <button class="btn" type="button" id="instalar-btn" hidden>Instalar</button>
+        <button class="fechar" type="button" id="instalar-fechar" aria-label="Fechar aviso">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <section class="cartao" aria-labelledby="t-dados">
+        <h2 class="titulo-secao" id="t-dados">Dados da peça</h2>
+        <div class="grade2">
+          <label class="campo"><span>Peso da mesa</span>
+            <span class="caixa"><input id="peso" type="text" inputmode="decimal" autocomplete="off" placeholder="0"><small>g</small></span>
+          </label>
+          <label class="campo"><span>Tempo da mesa</span>
+            <span class="caixa"><input id="tempo" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="2h35"><small>h:min</small></span>
+          </label>
+        </div>
+        <div class="grade2">
+          <label class="campo"><span>Peças na mesa</span>
+            <span class="caixa"><input id="qtd" type="text" inputmode="numeric" autocomplete="off" value="1"><small>un</small></span>
+          </label>
+          <label class="campo" title="Embalagem, acabamento, insumos, frete"><span>Extras por peça</span>
+            <span class="caixa"><b>R$</b><input id="extras" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00"></span>
+          </label>
+        </div>
+        <div class="campo"><span>Margem</span>
+          <div class="grade5" role="group" aria-label="Margem">
+            <button class="atalho" type="button" data-margem="70">70%</button>
+            <button class="atalho" type="button" data-margem="80">80%</button>
+            <button class="atalho" type="button" data-margem="90">90%</button>
+            <button class="atalho" type="button" data-margem="100">100%</button>
+            <button class="atalho" type="button" id="margem-outra" aria-pressed="false">Outra</button>
+          </div>
+        </div>
+        <label class="campo" id="margem-campo" hidden><span>Margem personalizada</span>
+          <span class="caixa"><input id="margem" type="text" inputmode="decimal" autocomplete="off" value="100"><small>%</small></span>
+        </label>
+      </section>
+
+      <details class="cartao detalhes" id="detalhes">
+        <summary>
+          <span class="lucro"><strong>Lucro</strong><b id="v-lucro"></b></span>
+          <span class="ver">Ver cálculo <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+        </summary>
+        <div class="corpo" aria-label="Detalhamento do cálculo">
+          <div class="linha"><div class="rot"><strong>Material</strong><span id="d-material"></span></div><span class="val" id="v-material"></span></div>
+          <div class="linha"><div class="rot"><strong>Impressão</strong><span id="d-impressao"></span></div><span class="val" id="v-impressao"></span></div>
+          <div class="divisor"></div>
+          <div class="linha forte"><div class="rot"><strong>Custo base</strong></div><span class="val" id="v-base"></span></div>
+          <div class="linha suave"><div class="rot"><strong id="r-perda">Perda/Refugo</strong></div><span class="val" id="v-perda"></span></div>
+          <div class="linha suave" id="r-extras"><div class="rot"><strong>Extras</strong><span id="d-extras"></span></div><span class="val" id="v-extras"></span></div>
+          <div class="linha total"><div class="rot"><strong>Custo total</strong></div><span class="val" id="v-total"></span></div>
+          <p class="nota">Lucro = valor a cobrar − custo total.</p>
+        </div>
+      </details>
+    </main>
+
+    <div class="barra">
+      <section class="resultado" aria-live="polite">
+        <div class="rot">
+          <span>Valor a cobrar</span>
+          <output id="v-final" for="peso tempo qtd extras margem">R$ 0,00</output>
+          <small id="d-unit" hidden></small>
+          <small id="d-final"></small>
+        </div>
+        <button class="copiar" type="button" id="copiar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span id="copiar-txt">Copiar</span>
+        </button>
+      </section>
+
+      <div class="acoes">
+      <button class="btn principal" type="button" id="whatsapp">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-4px;margin-right:8px"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/></svg>Enviar orçamento
+      </button>
+      <button class="btn" type="button" id="limpar">Limpar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- TELA: CONFIGURAÇÕES -->
+  <section class="tela" id="tela-config" aria-label="Configurações" hidden>
+    <header>
+      <button class="icone" type="button" id="voltar" aria-label="Voltar">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      </button>
+      <h1>Configurações</h1>
+    </header>
+
+    <main>
+      <p class="intro">Estes valores ficam salvos neste celular e valem para todos os cálculos.</p>
+
+      <form class="cartao config" id="form-config" novalidate>
+        <label class="campo"><span>Preço do rolo de 1 kg</span>
+          <span class="caixa"><b>R$</b><input id="cfg-kg" type="text" inputmode="decimal" autocomplete="off"><small>/kg</small></span>
+          <span class="ajuda" id="a-kg"></span>
+        </label>
+        <label class="campo"><span>Valor da hora de impressão</span>
+          <span class="caixa"><b>R$</b><input id="cfg-hora" type="text" inputmode="decimal" autocomplete="off"><small>/h</small></span>
+          <span class="ajuda" id="a-hora"></span>
+        </label>
+        <label class="campo"><span>Perda/Refugo</span>
+          <span class="caixa"><input id="cfg-perda" type="text" inputmode="decimal" autocomplete="off"><small>%</small></span>
+          <span class="ajuda neutra">Acrescentado ao custo base para chegar ao custo total</span>
+        </label>
+        <label class="campo"><span>Preço mínimo por pedido</span>
+          <span class="caixa"><b>R$</b><input id="cfg-minimo" type="text" inputmode="decimal" autocomplete="off"></span>
+          <span class="ajuda neutra">Nenhum orçamento sai abaixo disso. Deixe 0,00 para desligar.</span>
+        </label>
+      </form>
+
+      <div class="espaco"></div>
+      <button class="btn principal" type="submit" form="form-config">Salvar</button>
+      <button class="btn" type="button" id="restaurar">Restaurar padrões</button>
+    </main>
+  </section>
+
+</div>
+<div class="aviso" id="aviso" role="status"></div>
+
+<script src="calc.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
