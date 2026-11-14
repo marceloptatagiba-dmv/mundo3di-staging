@@ -75,6 +75,47 @@
     igual('texto 3 peças', C.textoOrcamento(r3).replace(NB, ' '),
       '*Orçamento — Mundo 3DI*\n3 peças impressas em 3D\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
 
+    // v3 · 1. vários filamentos
+    igual('filamento: rolo 1 kg a R$ 150 = R$ 150/kg', C.precoKgMaterial({ precoRolo: 150, pesoRolo: 1000 }), 150);
+    igual('filamento: rolo 500 g a R$ 90 = R$ 0,18/g', m(C.precoKgMaterial({ precoRolo: 90, pesoRolo: 500 }) / 1000), 'R$ 0,18');
+    igual('filamento: peso do rolo vazio = 1000 g', C.precoKgMaterial({ precoRolo: 120, pesoRolo: 0 }), 120);
+    igual('filamento: preço vazio = 0', C.precoKgMaterial({ precoRolo: 0, pesoRolo: 1000 }), 0);
+    [['1000', 1000], ['1.000', 1000], ['1 000', 1000], ['500', 500], ['250g', 250], ['', 1000], ['0', 1000], ['abc', 1000], ['750,5', 750]].forEach(function (t) {
+      igual('lerPesoRolo ' + JSON.stringify(t[0]), C.lerPesoRolo(t[0]), t[1]);
+    });
+    var pla = C.lerMateriais(null);
+    igual('sem nada salvo: 1 filamento', pla.materiais.length, 1);
+    igual('sem nada salvo: PLA', pla.materiais[0].nome, 'PLA');
+    igual('sem nada salvo: R$ 150 / 1000 g', pla.materiais[0].precoRolo + '/' + pla.materiais[0].pesoRolo, '150/1000');
+    var rPla = com({ precoKg: C.precoKgMaterial(pla.materiais[0]) });
+    igual('PLA padrão = planilha R$ 2,36', m(rPla.valorCobrar), 'R$ 2,36');
+    var mig = C.lerMateriais({ precoKg: 135.5, valorHora: 3, perdaPct: 5, minimo: 0 });
+    igual('migração da v2: PLA com o preço antigo', mig.materiais[0].nome + ' ' + mig.materiais[0].precoRolo + ' ' + mig.materiais[0].pesoRolo, 'PLA 135.5 1000');
+    igual('migração da v2: PLA é o padrão', mig.materialPadrao, mig.materiais[0].id);
+    var lista = C.lerMateriais({ materiais: [
+      { id: 'a', nome: ' PLA ', precoRolo: 150, pesoRolo: 1000 },
+      { id: 'b', nome: '', precoRolo: 90, pesoRolo: 500 },
+      { id: 'b', nome: 'TPU', precoRolo: -5, pesoRolo: 'x' }
+    ], materialPadrao: 'zzz' });
+    igual('lista: nome sem espaços', lista.materiais[0].nome, 'PLA');
+    igual('lista: nome vazio vira "Filamento 2"', lista.materiais[1].nome, 'Filamento 2');
+    igual('lista: id repetido é corrigido', lista.materiais[2].id !== 'b', true);
+    igual('lista: preço inválido = 0 e peso inválido = 1000', lista.materiais[2].precoRolo + '/' + lista.materiais[2].pesoRolo, '0/1000');
+    igual('lista: padrão inexistente vira o primeiro', lista.materialPadrao, 'a');
+    igual('lista: padrão salvo é mantido', C.lerMateriais({ materiais: [{ id: 'a', nome: 'PLA', precoRolo: 1 }, { id: 'b', nome: 'PETG', precoRolo: 1 }], materialPadrao: 'b' }).materialPadrao, 'b');
+    var muitos = []; for (var i = 0; i < 20; i++) muitos.push({ id: 'x' + i, nome: 'F' + i, precoRolo: 100 });
+    igual('lista: no máximo ' + C.MAX_MATERIAIS + ' filamentos', C.lerMateriais({ materiais: muitos }).materiais.length, C.MAX_MATERIAIS);
+    igual('lista vazia salva: cria PLA', C.lerMateriais({ materiais: [], precoKg: 99 }).materiais[0].precoRolo, 99);
+    var rTpu = com({ peso: 100, tempo: 0, precoKg: C.precoKgMaterial({ precoRolo: 90, pesoRolo: 500 }) });
+    igual('TPU 100 g (rolo 500 g a R$ 90): material', m(rTpu.material), 'R$ 18,00');
+    igual('texto sem material (opção desligada)', C.textoOrcamento(r1, { material: '' }).replace(NB, ' '), '*Orçamento — Mundo 3DI*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
+    igual('texto com material (1 peça)', C.textoOrcamento(r1, { material: 'PETG' }).replace(NB, ' '),
+      '*Orçamento — Mundo 3DI*\nPeça impressa em 3D\nMaterial: PETG\n*Valor: R$ 2,36*');
+    igual('texto com material (3 peças)', C.textoOrcamento(r3, { material: 'PETG' }).replace(NB, ' '),
+      '*Orçamento — Mundo 3DI*\n3 peças impressas em 3D\nMaterial: PETG\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
+    var txtMat = C.textoOrcamento(r3, { material: 'PETG' }).toLowerCase();
+    igual('texto nunca mostra custo nem margem', /custo|margem|lucro|perda/.test(txtMat), false);
+
     return resultados;
   }
 

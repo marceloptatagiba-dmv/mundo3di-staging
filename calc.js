@@ -3,6 +3,8 @@
   'use strict';
 
   var PADROES = { precoKg: 150, valorHora: 2.25, perdaPct: 5, margemPct: 100, minimo: 0 };
+  var PESO_ROLO_PADRAO = 1000;   // gramas
+  var MAX_MATERIAIS = 12;
 
   /* Converte texto digitado (vírgula ou ponto) em número >= 0. Vazio ou inválido = 0. */
   function lerNumero(valor) {
@@ -87,21 +89,73 @@
     };
   }
 
+  /* ---------- Filamentos ---------- */
+
+  /* Preço por kg de um filamento a partir do preço e do peso do rolo (rolo de 500 g a R$ 90 = R$ 180/kg). */
+  function precoKgMaterial(m) {
+    if (!m || !(m.precoRolo > 0)) return 0;
+    var peso = m.pesoRolo > 0 ? m.pesoRolo : PESO_ROLO_PADRAO;
+    return m.precoRolo / peso * 1000;
+  }
+
+  /* Peso do rolo em gramas inteiras: "1000", "1.000" e "1 000" = 1000. Vazio ou inválido = 1000. */
+  function lerPesoRolo(valor) {
+    var n = parseInt(String(valor == null ? '' : valor).split(',')[0].replace(/\D/g, ''), 10);
+    return isFinite(n) && n > 0 ? Math.min(n, 100000) : PESO_ROLO_PADRAO;
+  }
+
+  function numeroValido(n) { return typeof n === 'number' && isFinite(n) && n >= 0; }
+
+  /*
+   * Lê a lista de filamentos de uma configuração salva.
+   * Configuração antiga (v2, só "preço do rolo de 1 kg"): vira o filamento "PLA", rolo de 1000 g, padrão.
+   * Retorna { materiais: [{ id, nome, precoRolo, pesoRolo }], materialPadrao: id } — sempre com 1 filamento ou mais.
+   */
+  function lerMateriais(salvo) {
+    var lista = [], ids = {};
+    if (salvo && Array.isArray(salvo.materiais)) {
+      salvo.materiais.forEach(function (m) {
+        if (!m || typeof m !== 'object' || lista.length >= MAX_MATERIAIS) return;
+        var id = typeof m.id === 'string' && m.id && !ids[m.id] ? m.id : 'm' + (lista.length + 1);
+        while (ids[id]) id += 'x';
+        ids[id] = true;
+        var nome = String(m.nome == null ? '' : m.nome).trim().slice(0, 30);
+        lista.push({
+          id: id,
+          nome: nome || 'Filamento ' + (lista.length + 1),
+          precoRolo: numeroValido(m.precoRolo) ? m.precoRolo : 0,
+          pesoRolo: m.pesoRolo > 0 && isFinite(m.pesoRolo) ? m.pesoRolo : PESO_ROLO_PADRAO
+        });
+      });
+    }
+    if (!lista.length) {
+      var kg = salvo && numeroValido(salvo.precoKg) ? salvo.precoKg : PADROES.precoKg;
+      lista.push({ id: 'pla', nome: 'PLA', precoRolo: kg, pesoRolo: PESO_ROLO_PADRAO });
+    }
+    var padrao = lista[0].id;
+    if (salvo && lista.some(function (m) { return m.id === salvo.materialPadrao; })) padrao = salvo.materialPadrao;
+    return { materiais: lista, materialPadrao: padrao };
+  }
+
   var fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   function moeda(n) { return fmtBRL.format(n); }
   function decimal(n, min, max) {
     return n.toLocaleString('pt-BR', { minimumFractionDigits: min, maximumFractionDigits: max });
   }
 
-  /* Texto do orçamento para enviar ao cliente (não revela custo nem margem). */
-  function textoOrcamento(r) {
+  /* Texto do orçamento para enviar ao cliente (não revela custo nem margem).
+     opcoes.material: nome do filamento — só entra no texto se vier preenchido (opção "Mostrar filamento no orçamento"). */
+  function textoOrcamento(r, opcoes) {
+    var material = opcoes && opcoes.material ? String(opcoes.material).trim() : '';
     var linhas = ['*Orçamento — Mundo 3DI*'];
     if (r.qtd > 1) {
       linhas.push(r.qtd + ' peças impressas em 3D');
+      if (material) linhas.push('Material: ' + material);
       linhas.push('Valor por peça: ' + moeda(r.valorUnitario));
       linhas.push('*Total: ' + moeda(r.valorCobrar) + '*');
     } else {
       linhas.push('Peça impressa em 3D');
+      if (material) linhas.push('Material: ' + material);
       linhas.push('*Valor: ' + moeda(r.valorCobrar) + '*');
     }
     return linhas.join('\n');
@@ -110,7 +164,9 @@
   var Calc = {
     PADROES: PADROES, lerNumero: lerNumero, lerTempo: lerTempo, formatarTempo: formatarTempo,
     lerQuantidade: lerQuantidade, calcular: calcular, moeda: moeda, decimal: decimal,
-    textoOrcamento: textoOrcamento
+    textoOrcamento: textoOrcamento,
+    PESO_ROLO_PADRAO: PESO_ROLO_PADRAO, MAX_MATERIAIS: MAX_MATERIAIS,
+    precoKgMaterial: precoKgMaterial, lerMateriais: lerMateriais, lerPesoRolo: lerPesoRolo
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = Calc; }
   root.Calc = Calc;

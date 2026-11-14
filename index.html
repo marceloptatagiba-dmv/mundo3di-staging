@@ -119,6 +119,26 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 .instalar .btn{width:auto;height:40px;padding:0 14px;font-size:14px}
 .fechar{background:none;border:0;width:44px;height:44px;margin:-10px -10px -10px 0;color:var(--suave)}
 
+.rot-linha{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;height:15px}
+.rot-linha label{font-size:12px;font-weight:600;color:var(--suave);white-space:nowrap}
+.chip-mat{position:relative;display:flex;align-items:center;gap:2px;min-width:0;font-size:12px;font-weight:700;color:var(--verde-texto);padding:10px 2px 10px 6px;margin:-10px -2px -10px 0}
+.chip-mat span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip-mat svg{flex-shrink:0}
+.chip-mat select{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px;border:0;cursor:pointer;-webkit-appearance:none;appearance:none}
+.chip-mat:focus-within{outline:2px solid var(--verde);outline-offset:-6px;border-radius:8px}
+.lista-mat{display:flex;flex-direction:column;gap:12px}
+.mat{border:1.5px solid var(--linha);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.mat-topo{display:flex;gap:8px;align-items:center}
+.mat-topo .caixa{flex:1;min-width:0}
+.mat-topo .caixa input{font-size:17px}
+.icone-p{width:44px;height:48px;border-radius:12px;border:1.5px solid var(--borda);background:#fff;display:flex;align-items:center;justify-content:center;padding:0;color:var(--suave);flex-shrink:0}
+.icone-p:disabled{opacity:.35;cursor:default}
+.mat-rodape{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mat-rodape label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;min-height:32px}
+.mat-rodape input,.marcar input{width:20px;height:20px;accent-color:var(--verde);margin:0;flex-shrink:0}
+.marcar{display:flex;align-items:flex-start;gap:10px;font-size:13px;font-weight:600;line-height:1.4;padding:4px 0}
+.btn.mais{height:46px;font-size:14px;color:var(--verde-texto)}
+.btn.mais[hidden]{display:none}
 .aviso{position:fixed;left:50%;top:calc(84px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-20px);background:var(--preto);color:#fff;font-size:14px;font-weight:700;
   padding:12px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10}
 .aviso.ver{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -151,9 +171,12 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
       <section class="cartao" aria-labelledby="t-dados">
         <h2 class="titulo-secao" id="t-dados">Dados da peça</h2>
         <div class="grade2">
-          <label class="campo"><span>Peso da mesa</span>
-            <span class="caixa"><input id="peso" type="text" inputmode="decimal" autocomplete="off" placeholder="0"><small>g</small></span>
-          </label>
+          <div class="campo">
+            <span class="rot-linha"><label for="peso">Peso da mesa</label>
+              <span class="chip-mat"><span id="material-nome">PLA</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg><select id="material" aria-label="Filamento"></select></span>
+            </span>
+            <label class="caixa"><input id="peso" type="text" inputmode="decimal" autocomplete="off" placeholder="0"><small>g</small></label>
+          </div>
           <label class="campo"><span>Tempo da mesa</span>
             <span class="caixa"><input id="tempo" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="0"><small>h:min</small></span>
           </label>
@@ -234,10 +257,14 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
       <p class="intro">Estes valores ficam salvos neste celular e valem para todos os cálculos.</p>
 
       <form class="cartao config" id="form-config" novalidate>
-        <label class="campo"><span>Preço do rolo de 1 kg</span>
-          <span class="caixa"><b>R$</b><input id="cfg-kg" type="text" inputmode="decimal" autocomplete="off"><small>/kg</small></span>
-          <span class="ajuda" id="a-kg"></span>
-        </label>
+        <h2 class="titulo-secao">Filamentos</h2>
+        <div class="lista-mat" id="lista-materiais"></div>
+        <button class="btn mais" type="button" id="add-material">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><path d="M12 5v14M5 12h14"/></svg>Adicionar filamento
+        </button>
+        <label class="marcar"><input type="checkbox" id="cfg-mostrar-material"><span>Mostrar o filamento no orçamento enviado ao cliente</span></label>
+        <div class="divisor"></div>
+        <h2 class="titulo-secao">Custos</h2>
         <label class="campo"><span>Valor da hora de impressão</span>
           <span class="caixa"><b>R$</b><input id="cfg-hora" type="text" inputmode="decimal" autocomplete="off"><small>/h</small></span>
           <span class="ajuda" id="a-hora"></span>
