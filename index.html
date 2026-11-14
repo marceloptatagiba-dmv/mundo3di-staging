@@ -234,6 +234,22 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 .faixa-backup{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 14px;border-radius:14px;background:#FDF0D6;border:1.5px solid #F2D49B;font-size:13px;font-weight:600;color:#5C3303}
 .faixa-backup[hidden]{display:none}
 .faixa-backup p{margin:0;flex:1;line-height:1.35}
+.faixa-backup button{border:0;background:none;padding:10px 0;font:inherit;font-weight:800;color:#5C3303;text-decoration:underline;white-space:nowrap}
+.faixa-backup button[hidden]{display:none}
+.backup .linha .rot span{line-height:1.35}
+.backup .botoes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.backup .btn svg,.btn.com-icone svg{flex-shrink:0}
+.backup .btn,.btn.com-icone{display:flex;align-items:center;justify-content:center;gap:8px}
+.arquivo{display:flex;gap:12px;align-items:center;padding:12px;border-radius:12px;background:var(--fundo)}
+.arquivo .doc{width:40px;height:48px;border-radius:8px;background:#fff;border:1.5px solid var(--borda);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--verde-texto);flex-shrink:0}
+.arquivo p{margin:0;display:flex;flex-direction:column;gap:2px;min-width:0}
+.arquivo strong{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arquivo span{font-size:12px;font-weight:500;color:var(--suave)}
+.conteudo{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.conteudo li{display:flex;gap:10px;align-items:center;font-size:14px;font-weight:600}
+.conteudo li svg{color:var(--verde);flex-shrink:0}
+.erro-backup{margin:0;font-size:14px;font-weight:600;line-height:1.45;color:#8F2F08}
+.erro-backup[hidden],.interno[hidden],.arquivo[hidden],.conteudo[hidden]{display:none}
 .interno{background:var(--fundo);border:1.5px dashed var(--borda);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .interno .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--suave)}
 .seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1.5px solid var(--borda);border-radius:12px;overflow:hidden}
@@ -499,6 +515,19 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
       <div class="espaco"></div>
       <button class="btn principal" type="submit" form="form-config">Salvar</button>
       <button class="btn" type="button" id="restaurar">Restaurar padrões</button>
+
+      <section class="cartao backup" id="cartao-backup" aria-labelledby="t-backup">
+        <h2 class="titulo-secao" id="t-backup">Backup</h2>
+        <div class="linha"><div class="rot"><strong id="backup-titulo"></strong><span id="backup-detalhe"></span></div></div>
+        <button class="btn principal" type="button" id="backup-fazer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>Fazer backup</button>
+        <div class="botoes">
+          <button class="btn peq" type="button" id="backup-restaurar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Restaurar</button>
+          <button class="btn peq" type="button" id="backup-planilha"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>Planilha</button>
+        </div>
+        <button class="btn mais peq" type="button" id="backup-desfazer" hidden>Desfazer restauração</button>
+        <input type="file" id="backup-arq" accept=".json,application/json" hidden>
+        <p class="ajuda neutra">Salva configurações, filamentos, logo, catálogo e histórico num arquivo. Guarde no Google Drive, no e-mail ou mande para você mesmo no WhatsApp. O arquivo tem seus custos e clientes: <strong>não envie para cliente</strong>.</p>
+      </section>
     </main>
   </section>
 
@@ -524,8 +553,8 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
           <div class="num"><b id="hist-total">R$ 0,00</b><span>em orçamentos</span></div>
           <div class="num apr"><b id="hist-apr">0</b><span id="hist-apr-txt">aprovados</span></div>
         </section>
-        <!-- Lembrete de backup: preparado para a etapa do backup (item 2); fica escondido nesta etapa -->
-        <div class="faixa-backup" id="hist-lembrete" hidden><p id="hist-lembrete-txt"></p></div>
+        <!-- Lembrete de backup: aparece com 20 ou mais orçamentos desde o último backup (ou sem backup nenhum) -->
+        <div class="faixa-backup" id="hist-lembrete" hidden><p id="hist-lembrete-txt"></p><button type="button" id="hist-lembrete-fazer">Fazer backup</button></div>
       </div>
       <div id="hist-lista"></div>
       <p class="vazio" id="hist-vazio" hidden></p>
@@ -636,6 +665,39 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
     <p class="ajuda" id="excluir-txt"></p>
     <button class="btn principal" type="button" id="excluir-sim" style="background:#A3360A">Excluir</button>
     <button class="btn" type="button" id="excluir-nao">Cancelar</button>
+  </div>
+</div>
+
+<!-- PAINEL: RESTAURAR BACKUP -->
+<div class="folha" id="folha-restaurar" hidden>
+  <div class="folha-fundo" id="restaurar-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="restaurar-titulo">
+    <div class="folha-topo"><strong id="restaurar-titulo">Restaurar backup</strong>
+      <button class="fechar" type="button" id="restaurar-fechar" aria-label="Fechar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p class="erro-backup" id="restaurar-erro" role="alert" hidden></p>
+    <div class="arquivo" id="restaurar-arquivo" hidden><span class="doc">JSON</span><p><strong id="restaurar-nome"></strong><span id="restaurar-info"></span></p></div>
+    <ul class="conteudo" id="restaurar-itens" hidden></ul>
+    <div class="interno" id="restaurar-acontece" hidden><span class="tag">O que acontece</span>
+      <span class="ajuda neutra" id="restaurar-explica"></span>
+      <span class="nota-antigo" id="restaurar-aviso" hidden></span>
+    </div>
+    <p class="ajuda neutra" id="restaurar-desfazer" hidden>Dá para desfazer depois em Configurações › Backup.</p>
+    <button class="btn principal" type="button" id="restaurar-sim" hidden>Restaurar</button>
+    <button class="btn" type="button" id="restaurar-nao">Cancelar</button>
+  </div>
+</div>
+
+<!-- PAINEL: DESFAZER A RESTAURAÇÃO -->
+<div class="folha" id="folha-desfazer" hidden>
+  <div class="folha-fundo" id="desfazer-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="desfazer-titulo">
+    <div class="folha-topo"><strong id="desfazer-titulo">Desfazer a restauração?</strong></div>
+    <p class="ajuda neutra">Configurações, logo, catálogo e filamento voltam como estavam antes de restaurar, e os orçamentos que vieram do backup saem do histórico. Os orçamentos que você enviou depois de restaurar continuam.</p>
+    <button class="btn principal" type="button" id="desfazer-sim">Desfazer restauração</button>
+    <button class="btn" type="button" id="desfazer-nao">Cancelar</button>
   </div>
 </div>
 

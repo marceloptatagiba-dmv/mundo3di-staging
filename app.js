@@ -708,8 +708,212 @@
     avisar('Padrões restaurados — toque em Salvar');
   });
 
+  /* ---------- Backup, restauração e planilha ---------- */
+  var CHAVE_BACKUP = CHAVE + '-backup';              // { em, qtd }: último backup feito (data e quantos orçamentos havia)
+  var CHAVE_ANTES = CHAVE + '-antes-restaurar';      // { em, dados }: o estado de antes da última restauração (para desfazer)
+  var CHAVE_CAT = CHAVE + '-catalogo';               // catálogo de peças (chega na etapa seguinte; já entra no backup)
+  var emEntrega = false;                             // arquivo sendo compartilhado: evita toque duplo
+
+  function lerJSON(chave) { try { return JSON.parse(localStorage.getItem(chave) || 'null'); } catch (e) { return null; } }
+  function lerEstadoBackup() { var b = lerJSON(CHAVE_BACKUP); return b && typeof b.em === 'string' ? b : null; }
+  function lerAntes() {
+    var a = lerJSON(CHAVE_ANTES);
+    return a && typeof a.em === 'string' && a.dados && typeof a.dados === 'object' ? a : null;
+  }
+  /* Tudo o que o backup guarda, como está neste aparelho agora (configurações já salvas; o que está só digitado na tela de Configurações não entra) */
+  function dadosDoAparelho() {
+    var cfg = lerJSON(CHAVE), cont = 0;
+    try { cont = parseInt(localStorage.getItem(CHAVE_CONT) || '0', 10) || 0; } catch (e) {}
+    return D.montarDados({ config: cfg && typeof cfg === 'object' && !Array.isArray(cfg) ? cfg : config, logo: lerLogoSalvo(), contador: cont,
+      registros: lerLista(), catalogo: lerJSON(CHAVE_CAT), materialAtual: materialAtual || '' });
+  }
+  function gravarDados(d) {
+    try {
+      localStorage.setItem(CHAVE, JSON.stringify(d.config));
+      if (d.logo) localStorage.setItem(CHAVE_LOGO, d.logo); else localStorage.removeItem(CHAVE_LOGO);
+      localStorage.setItem(CHAVE_REG, JSON.stringify(d.registros));
+      localStorage.setItem(CHAVE_CONT, String(d.contador));
+      localStorage.setItem(CHAVE_CAT, JSON.stringify(d.catalogo));
+      if (d.materialAtual) localStorage.setItem(CHAVE_MAT, d.materialAtual); else localStorage.removeItem(CHAVE_MAT);
+      return true;
+    } catch (e) { return false; }
+  }
+  /* Depois de restaurar ou desfazer: recarrega da memória do aparelho o que a tela mostra */
+  function aplicarNaTela() {
+    config = carregarConfig();
+    try { materialAtual = localStorage.getItem(CHAVE_MAT); } catch (e) { materialAtual = null; }
+    montarSeletor(); atualizar();
+    preencherConfig(config); configInicial = JSON.stringify(lerConfigTela());
+    desenharBackup();
+  }
+  function desenharBackup() {
+    var d = D.descreverBackup(lerEstadoBackup(), lerLista(), new Date());
+    $('backup-titulo').textContent = d.titulo;
+    $('backup-detalhe').textContent = d.detalhe;
+    $('backup-detalhe').hidden = !d.detalhe;
+    $('backup-desfazer').hidden = !lerAntes();
+  }
+
+  function baixarArquivo(arq) {
+    var url = URL.createObjectURL(arq), a = document.createElement('a');
+    a.href = url; a.download = arq.name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+  /* Compartilhamento nativo (Drive, e-mail, WhatsApp); sem suporte a arquivo, baixa. Deve ser chamado direto do toque (o iPhone exige).
+     Alguns apps do menu do iPhone não aceitam .json: se o aparelho recusar o tipo, tenta como texto simples antes de baixar.
+     aoConcluir('enviou' | 'baixou' | 'cancelou'): quem cancela o compartilhamento não conta como backup feito. */
+  function entregarArquivo(arq, aoConcluir) {
+    var opcoes = [arq], alvo = null;
+    if (arq.type !== 'text/plain') opcoes.push(new File([arq], arq.name, { type: 'text/plain' }));
+    if (navigator.share && navigator.canShare) {
+      for (var i = 0; i < opcoes.length && !alvo; i++) {
+        try { if (navigator.canShare({ files: [opcoes[i]] })) alvo = opcoes[i]; } catch (e) {}
+      }
+    }
+    emEntrega = true;
+    if (!alvo) { baixarArquivo(arq); emEntrega = false; aoConcluir('baixou'); return; }
+    navigator.share({ files: [alvo], title: arq.name }).then(function () { emEntrega = false; aoConcluir('enviou'); }, function (e) {
+      emEntrega = false;
+      if (e && e.name === 'AbortError') { aoConcluir('cancelou'); return; }
+      baixarArquivo(arq); aoConcluir('baixou');
+    });
+  }
+
+  function fazerBackup() {
+    if (emEntrega) return;
+    var agora = new Date(), dados = dadosDoAparelho();
+    var texto = JSON.stringify(D.montarBackup(dados, { ambiente: AMB.nome, versaoApp: versaoEmUso, criadoEm: agora }));
+    var arq = new File([texto], D.nomeArquivoBackup(agora), { type: 'application/json' });
+    entregarArquivo(arq, function (como) {
+      if (como === 'cancelou') return;
+      try {
+        localStorage.setItem(CHAVE_BACKUP, JSON.stringify({ em: agora.toISOString(), qtd: dados.registros.length }));
+        localStorage.removeItem(CHAVE_ANTES);       // o "Desfazer restauração" vale até o próximo backup
+      } catch (e) {}
+      desenharBackup();
+      if (!$('tela-hist').hidden) desenharHist();
+      avisar(como === 'baixou' ? 'Backup salvo no aparelho' : 'Backup feito');
+    });
+  }
+  $('backup-fazer').addEventListener('click', fazerBackup);
+  $('hist-lembrete-fazer').addEventListener('click', fazerBackup);
+
+  /* Planilha (CSV) com o histórico inteiro: uso interno, tem custo e lucro */
+  $('backup-planilha').addEventListener('click', function () {
+    if (emEntrega) return;
+    var lista = lerLista(), agora = new Date();
+    if (!lista.length) { avisar('Nenhum orçamento para exportar'); return; }
+    var arq = new File([D.gerarCSV(lista, agora)], D.nomeArquivoCSV(agora), { type: 'text/csv' });
+    entregarArquivo(arq, function (como) { if (como === 'baixou') avisar('Planilha salva no aparelho'); });
+  });
+
+  /* Restaurar: escolher o arquivo -> painel de confirmação com o resumo */
+  var folhaRestaurar = $('folha-restaurar'), folhaDesfazer = $('folha-desfazer');
+  var restauracao = null;      // backup lido, esperando a confirmação
+  function lerTextoArquivo(arq) {
+    if (arq.text) return arq.text();
+    return new Promise(function (ok, erro) {
+      var r = new FileReader();
+      r.onload = function () { ok(String(r.result)); };
+      r.onerror = function () { erro(r.error); };
+      r.readAsText(arq);
+    });
+  }
+  function nomeAmbiente(n) { return n === 'producao' ? 'produção' : n === 'teste' ? 'teste' : ''; }
+  function abrirRestaurar(nome, res) {
+    restauracao = null;
+    var erro = $('restaurar-erro');
+    ['restaurar-arquivo', 'restaurar-itens', 'restaurar-acontece', 'restaurar-desfazer', 'restaurar-sim'].forEach(function (id) { $(id).hidden = true; });
+    $('restaurar-nao').textContent = 'Cancelar';
+    erro.hidden = !!res.ok;
+    if (!res.ok) {
+      erro.textContent = D.ERROS_BACKUP[res.erro] || D.ERROS_BACKUP.invalido;
+      $('restaurar-nao').textContent = 'Fechar';
+      folhaRestaurar.hidden = false;
+      return;
+    }
+    var b = res.backup, r = D.resumoBackup(b), atual = dadosDoAparelho();
+    restauracao = b;
+    $('restaurar-nome').textContent = nome;
+    var quando = b.criadoEm ? D.dataBR(new Date(b.criadoEm)) + ' às ' + D.hora(b.criadoEm) : 'data desconhecida';
+    var amb = nomeAmbiente(b.ambiente);
+    $('restaurar-info').textContent = quando + (amb ? ' · ' + amb : '') + (b.versaoApp ? ' · versão ' + b.versaoApp : '');
+    var itens = [
+      r.filamentos ? 'Configurações e ' + r.filamentos + (r.filamentos === 1 ? ' filamento' : ' filamentos') : 'Configurações',
+      r.temLogo ? 'Logo e dados do negócio' : (atual.logo ? 'Dados do negócio, sem logo (o logo deste celular será removido)' : 'Dados do negócio, sem logo'),
+      r.pecas ? r.pecas + (r.pecas === 1 ? ' peça no catálogo' : ' peças no catálogo') : 'Nenhuma peça no catálogo',
+      D.descreverOrcamentos(r)
+    ];
+    var ul = $('restaurar-itens'); ul.textContent = '';
+    itens.forEach(function (t) {
+      var li = document.createElement('li');
+      li.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+      li.appendChild(document.createTextNode(t));
+      ul.appendChild(li);
+    });
+    var proximo = D.restaurarDados(atual, b.dados).contador + 1;
+    $('restaurar-explica').textContent = 'Substitui configurações, logo e catálogo deste celular. Junta os orçamentos, sem repetir. A numeração segue do maior número: o próximo será Nº ' + C.formatarNumero(proximo) + '.';
+    var avisos = [];
+    if (amb && AMB.nome && b.ambiente !== AMB.nome) avisos.push('Este backup foi feito no ambiente de ' + amb + ' e este app é o de ' + (nomeAmbiente(AMB.nome) || AMB.nome) + '.');
+    if (b.versaoApp && versaoEmUso && C.compararVersoes(b.versaoApp, versaoEmUso) === 1) avisos.push('Feito numa versão mais nova (' + b.versaoApp + ') que a deste app (' + versaoEmUso + ').');
+    $('restaurar-aviso').textContent = avisos.join(' ');
+    $('restaurar-aviso').hidden = !avisos.length;
+    ['restaurar-arquivo', 'restaurar-itens', 'restaurar-acontece', 'restaurar-desfazer', 'restaurar-sim'].forEach(function (id) { $(id).hidden = false; });
+    folhaRestaurar.hidden = false;
+  }
+  function fecharRestaurar() { folhaRestaurar.hidden = true; restauracao = null; }
+  function fecharPaineisBackup() { fecharRestaurar(); folhaDesfazer.hidden = true; }
+  $('backup-restaurar').addEventListener('click', function () { $('backup-arq').click(); });
+  $('backup-arq').addEventListener('change', function () {
+    var arq = this.files && this.files[0];
+    this.value = '';
+    if (!arq) return;
+    if (arq.size > D.MAX_ARQUIVO_BACKUP) { abrirRestaurar(arq.name, { ok: false, erro: 'grande' }); return; }
+    lerTextoArquivo(arq).then(function (t) { abrirRestaurar(arq.name, D.lerBackup(t)); },
+      function () { abrirRestaurar(arq.name, { ok: false, erro: 'invalido' }); });
+  });
+  $('restaurar-fechar').addEventListener('click', fecharRestaurar);
+  $('restaurar-nao').addEventListener('click', fecharRestaurar);
+  $('restaurar-fundo').addEventListener('click', fecharRestaurar);
+  $('restaurar-sim').addEventListener('click', function () {
+    if (!restauracao) return;
+    var atual = dadosDoAparelho(), novo = D.restaurarDados(atual, restauracao.dados);
+    try {
+      localStorage.setItem(CHAVE_ANTES, JSON.stringify({ em: new Date().toISOString(), dados: atual }));
+    } catch (e) { fecharRestaurar(); avisar('Não deu para guardar o estado atual: nada foi mudado'); return; }
+    if (!gravarDados(novo)) {
+      gravarDados(atual);
+      try { localStorage.removeItem(CHAVE_ANTES); } catch (e) {}
+      fecharRestaurar(); avisar('Não deu para restaurar: nada foi mudado'); return;
+    }
+    fecharRestaurar();
+    aplicarNaTela();
+    avisar('Backup restaurado');
+  });
+
+  /* Desfazer restauração (até o próximo backup ou restauração) */
+  $('backup-desfazer').addEventListener('click', function () { folhaDesfazer.hidden = false; });
+  function fecharDesfazer() { folhaDesfazer.hidden = true; }
+  $('desfazer-nao').addEventListener('click', fecharDesfazer);
+  $('desfazer-fundo').addEventListener('click', fecharDesfazer);
+  $('desfazer-sim').addEventListener('click', function () {
+    var antes = lerAntes();
+    fecharDesfazer();
+    if (!antes) { desenharBackup(); return; }
+    var atual = dadosDoAparelho();
+    if (!gravarDados(D.desfazerRestauracao(atual, antes))) { gravarDados(atual); avisar('Não deu para desfazer: nada foi mudado'); return; }
+    try { localStorage.removeItem(CHAVE_ANTES); } catch (e) {}
+    aplicarNaTela();
+    avisar('Restauração desfeita');
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (!folhaDesfazer.hidden) fecharDesfazer(); else if (!folhaRestaurar.hidden) fecharRestaurar();
+  });
+
   /* ---------- Histórico de orçamentos ---------- */
-  var LEMBRETE_BACKUP_ATIVO = false;   // o lembrete entra na etapa do backup (v4, item 2); a faixa já existe, escondida
+  var LEMBRETE_BACKUP_ATIVO = true;    // faixa de lembrete de backup no topo do histórico (20 ou mais orçamentos desde o último backup)
   var histPeriodo = '30', histBusca = '', histLimite = 50, histTimerBusca;
   var detChave = null;                 // orçamento aberto no detalhe
 
@@ -729,9 +933,10 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.per === histPeriodo));
     });
-    var lemb = LEMBRETE_BACKUP_ATIVO ? D.precisaLembreteBackup(todos, null) : { mostrar: false, qtd: 0 };
+    var ultimoBackup = lerEstadoBackup();
+    var lemb = LEMBRETE_BACKUP_ATIVO ? D.precisaLembreteBackup(todos, ultimoBackup) : { mostrar: false, qtd: 0 };
     $('hist-lembrete').hidden = !lemb.mostrar;
-    if (lemb.mostrar) $('hist-lembrete-txt').textContent = lemb.qtd + ' orçamentos desde o último backup.';
+    if (lemb.mostrar) $('hist-lembrete-txt').textContent = D.textoLembreteBackup(lemb.qtd, ultimoBackup);
 
     var box = $('hist-lista'); box.textContent = '';
     var vazio = $('hist-vazio');
@@ -883,7 +1088,8 @@
     $('tela-calc').hidden = tela !== 'calc';
     $('tela-config').hidden = tela !== 'config';
     $('tela-hist').hidden = tela !== 'hist';
-    if (tela === 'config') { preencherConfig(config); configInicial = JSON.stringify(lerConfigTela()); }
+    if (tela === 'config') { preencherConfig(config); configInicial = JSON.stringify(lerConfigTela()); desenharBackup(); }
+    else fecharPaineisBackup();
     if (tela === 'hist') desenharHist(); else fecharSheetsHist();
     desenharVersao();
     window.scrollTo(0, 0);

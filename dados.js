@@ -6,7 +6,11 @@
   var SITUACOES = ['enviado', 'aprovado', 'recusado'];
   var MAX_CORES = 8;
   var ATALHOS_MARGEM = [70, 80, 90, 100];
-  var LIMITE_LEMBRETE_BACKUP = 20;       // orçamentos desde o último backup (o lembrete só é exibido na etapa do backup)
+  var LIMITE_LEMBRETE_BACKUP = 20;       // orçamentos desde o último backup (a faixa de lembrete aparece só no Histórico)
+  var BACKUP_APP = 'orcamentador-3di';
+  var BACKUP_FORMATO = 1;                // número do formato do arquivo: só muda quando o arquivo deixar de ser compatível
+  var MAX_CATALOGO = 100;
+  var MAX_ARQUIVO_BACKUP = 20 * 1024 * 1024;   // bytes: acima disso o arquivo não é lido
   var DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   var ISO_DATA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -318,13 +322,189 @@
     return { qtd: reg.qtd, valorUnitario: reg.valorPeca, valorCobrar: reg.total };
   }
 
-  /* Lembrete de backup (só será exibido na etapa do backup): N orçamentos desde o último backup, a partir de 20.
+  /* Lembrete de backup: N orçamentos desde o último backup, a partir de 20.
      backup: { em: ISO } ou null (nenhum backup feito). */
   function precisaLembreteBackup(regs, backup, limite) {
     var lista = Array.isArray(regs) ? regs : [];
     var desde = backup && dataValida(backup.em) ? new Date(backup.em).getTime() : null;
     var qtd = desde === null ? lista.length : lista.filter(function (r) { return new Date(r.ts).getTime() > desde; }).length;
     return { mostrar: qtd >= (limite > 0 ? limite : LIMITE_LEMBRETE_BACKUP), qtd: qtd };
+  }
+
+
+  /* ---------- backup e restauração ---------- */
+
+  function objeto(x) { return x && typeof x === 'object' && !Array.isArray(x); }
+  function inteiroOk(x) { var n = Math.floor(Number(x)); return isFinite(n) && n > 0 ? n : 0; }
+  function copiarObjeto(o) { return JSON.parse(JSON.stringify(o)); }
+
+  /* Dados deste aparelho no formato do backup (e do "antes de restaurar"). */
+  function montarDados(d) {
+    d = d || {};
+    return {
+      config: objeto(d.config) ? d.config : {},
+      logo: typeof d.logo === 'string' && /^data:image\//.test(d.logo) ? d.logo : '',
+      contador: inteiroOk(d.contador),
+      registros: lerRegistros(d.registros),
+      catalogo: Array.isArray(d.catalogo) ? d.catalogo.filter(objeto).slice(0, MAX_CATALOGO) : [],
+      materialAtual: limparTexto(d.materialAtual, 40)
+    };
+  }
+
+  /* Arquivo de backup. meta: { ambiente, versaoApp, criadoEm (Date) } */
+  function montarBackup(dados, meta) {
+    meta = meta || {};
+    return {
+      app: BACKUP_APP, formato: BACKUP_FORMATO,
+      ambiente: limparTexto(meta.ambiente, 20), versaoApp: limparTexto(meta.versaoApp, 24),
+      criadoEm: (meta.criadoEm instanceof Date ? meta.criadoEm : new Date()).toISOString(),
+      dados: montarDados(dados)
+    };
+  }
+  function nomeArquivoBackup(d) { return 'backup-orcamento-3di-' + dataISO(d || new Date()) + '.json'; }
+  function nomeArquivoCSV(d) { return 'orcamentos-3di-' + dataISO(d || new Date()) + '.csv'; }
+
+  /*
+   * Lê o texto de um arquivo de backup. Devolve { ok: true, backup } ou { ok: false, erro: 'invalido' | 'novo' | 'grande' }.
+   * 'novo' = feito por uma versão mais nova do formato (o app precisa ser atualizado).
+   */
+  var ERROS_BACKUP = {
+    invalido: 'Este arquivo não é um backup do Orçamento 3DI.',
+    novo: 'Backup feito numa versão mais nova. Atualize o app.',
+    grande: 'Este arquivo é grande demais para ser um backup do Orçamento 3DI.'
+  };
+  function lerBackup(texto) {
+    if (typeof texto !== 'string') return { ok: false, erro: 'invalido' };
+    if (texto.length > MAX_ARQUIVO_BACKUP) return { ok: false, erro: 'grande' };
+    var b;
+    try { b = JSON.parse(texto.replace(/^﻿/, '')); } catch (e) { return { ok: false, erro: 'invalido' }; }
+    if (!objeto(b) || b.app !== BACKUP_APP || typeof b.formato !== 'number' || !isFinite(b.formato) || b.formato < 1 || !objeto(b.dados)) return { ok: false, erro: 'invalido' };
+    if (b.formato > BACKUP_FORMATO) return { ok: false, erro: 'novo' };
+    return { ok: true, backup: {
+      app: BACKUP_APP, formato: b.formato,
+      ambiente: limparTexto(b.ambiente, 20), versaoApp: limparTexto(b.versaoApp, 24),
+      criadoEm: dataValida(b.criadoEm) ? new Date(b.criadoEm).toISOString() : '',
+      dados: montarDados(b.dados)
+    } };
+  }
+
+  /* O que mostrar no painel "Restaurar backup" */
+  function resumoBackup(b) {
+    var d = b.dados, regs = d.registros, nums = regs.map(function (r) { return r.n; });
+    var cfg = d.config || {};
+    return {
+      ambiente: b.ambiente, versaoApp: b.versaoApp, criadoEm: b.criadoEm,
+      filamentos: Array.isArray(cfg.materiais) ? cfg.materiais.length : 0,
+      temLogo: !!d.logo, pecas: d.catalogo.length, orcamentos: regs.length,
+      numMin: nums.length ? Math.min.apply(null, nums) : 0, numMax: nums.length ? Math.max.apply(null, nums) : 0,
+      contador: d.contador
+    };
+  }
+  function plural(n, um, varios) { return n + ' ' + (n === 1 ? um : varios); }
+  /* "128 orçamentos (Nº 0001 a 0128)" · "1 orçamento (Nº 0007)" · "Nenhum orçamento" */
+  function descreverOrcamentos(r) {
+    if (!r.orcamentos) return 'Nenhum orçamento';
+    var faixa = r.numMin === r.numMax ? 'Nº ' + numero4(r.numMin) : 'Nº ' + numero4(r.numMin) + ' a ' + numero4(r.numMax);
+    return plural(r.orcamentos, 'orçamento', 'orçamentos') + ' (' + faixa + ')';
+  }
+
+  /*
+   * Junta duas listas de orçamentos sem repetir (mesmo nº + mesma data/hora = mesmo registro; vale o da primeira lista),
+   * da data mais antiga para a mais nova, guardando no máximo "max" (os mais antigos saem).
+   */
+  function juntarRegistros(principal, outros, max) {
+    var vistos = {}, todos = [];
+    [lerRegistros(principal), lerRegistros(outros)].forEach(function (lista) {
+      lista.forEach(function (r) {
+        var k = chaveRegistro(r);
+        if (vistos[k]) return;
+        vistos[k] = true; todos.push(r);
+      });
+    });
+    todos.sort(function (a, b) {
+      var d = new Date(a.ts).getTime() - new Date(b.ts).getTime();
+      return d !== 0 ? d : a.n - b.n;
+    });
+    var limite = max > 0 ? max : MAX_REGISTROS;
+    return todos.length > limite ? todos.slice(todos.length - limite) : todos;
+  }
+
+  /*
+   * Restaurar: substitui configurações, logo, catálogo e filamento atual pelos do backup; junta os orçamentos
+   * (vale o registro deste aparelho quando é o mesmo); o contador fica com o maior número, para o próximo nunca repetir.
+   */
+  function restaurarDados(atual, backup) {
+    var a = montarDados(atual), b = montarDados(backup);
+    var regs = juntarRegistros(a.registros, b.registros, MAX_REGISTROS);
+    var maior = Math.max(a.contador, b.contador);
+    regs.forEach(function (r) { if (r.n > maior) maior = r.n; });   // nunca repetir o número de um registro que existe
+    return { config: copiarObjeto(b.config), logo: b.logo, contador: maior, registros: regs, catalogo: b.catalogo, materialAtual: b.materialAtual };
+  }
+
+  /*
+   * Desfazer a restauração: volta configurações, logo, catálogo e filamento do estado guardado e tira os orçamentos que
+   * vieram do backup; os orçamentos feitos depois da restauração ficam. "antes" = { em, dados }.
+   */
+  function desfazerRestauracao(atual, antes) {
+    var a = montarDados(atual), s = montarDados(antes && antes.dados);
+    var desde = antes && dataValida(antes.em) ? new Date(antes.em).getTime() : 0;
+    var novos = a.registros.filter(function (r) { return new Date(r.ts).getTime() > desde; });
+    var regs = juntarRegistros(s.registros, novos, MAX_REGISTROS);
+    var maior = Math.max(a.contador, s.contador);
+    regs.forEach(function (r) { if (r.n > maior) maior = r.n; });
+    return { config: copiarObjeto(s.config), logo: s.logo, contador: maior, registros: regs, catalogo: s.catalogo, materialAtual: s.materialAtual };
+  }
+
+  /* Situação do cartão Backup. backup: { em: ISO, qtd } ou null. */
+  function descreverBackup(backup, regs, hoje) {
+    var lista = Array.isArray(regs) ? regs : [];
+    if (!backup || !dataValida(backup.em)) {
+      return { titulo: 'Nenhum backup feito ainda', detalhe: lista.length ? plural(lista.length, 'orçamento ainda sem backup', 'orçamentos ainda sem backup') : '' };
+    }
+    var d = new Date(backup.em), h0 = inicioDoDia(hoje || new Date());
+    var dias = Math.max(0, Math.round((h0.getTime() - inicioDoDia(d).getTime()) / 86400000));
+    var quando = dias === 0 ? 'hoje' : dias === 1 ? 'ontem' : 'há ' + dias + ' dias';
+    var depois = precisaLembreteBackup(lista, backup).qtd;
+    return { titulo: 'Último backup: ' + dataBR(d), detalhe: quando + ' · ' + (depois ? plural(depois, 'orçamento depois dele', 'orçamentos depois dele') : 'nenhum orçamento depois dele') };
+  }
+  /* Texto da faixa de lembrete no Histórico */
+  function textoLembreteBackup(qtd, backup) {
+    var n = plural(qtd, 'orçamento', 'orçamentos');
+    return backup && dataValida(backup.em) ? n + ' desde o último backup.' : n + ' sem backup.';
+  }
+
+  /* ---------- planilha (CSV) ---------- */
+
+  /* Texto de uma célula: entre aspas quando tem ; " ou quebra de linha; um texto que começaria com = + - @ ganha um apóstrofo
+     na frente (o Excel/Planilhas não o tratam como fórmula). */
+  function celulaCSV(v, ehTexto) {
+    var t = String(v == null ? '' : v);
+    if (ehTexto && /^[=+\-@\t\r]/.test(t)) t = "'" + t;
+    return /[;"\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  }
+  function decimalBR(n) { return c2(Number(n) || 0).toFixed(2).replace('.', ','); }
+  var COLUNAS_CSV = ['Nº', 'Data', 'Hora', 'Formato', 'Cliente', 'Peça', 'Material', 'Quantidade', 'Valor por peça', 'Total', 'Custo total', 'Lucro', 'Situação', 'Reenvios'];
+  /*
+   * Histórico inteiro para Excel/Planilhas: separador ";", vírgula decimal, UTF-8 com BOM, linhas em ordem de data (a mais antiga primeiro).
+   * Uso interno: tem custo e lucro.
+   */
+  function gerarCSV(regs, hoje) {
+    var lista = (Array.isArray(regs) ? regs : []).slice().sort(function (a, b) {
+      var d = new Date(a.ts).getTime() - new Date(b.ts).getTime();
+      return d !== 0 ? d : a.n - b.n;
+    });
+    var linhas = [COLUNAS_CSV.map(function (c) { return celulaCSV(c, false); }).join(';')];
+    lista.forEach(function (r) {
+      var d = new Date(r.ts);
+      var texto = { 4: true, 5: true, 6: true };     // cliente, peça e material: textos digitados pela pessoa
+      linhas.push([
+        numero4(r.n), dataBR(d), hora(r.ts), r.formato === 'imagem' ? 'Imagem' : 'Texto',
+        r.cliente, r.descricao, materialDoRegistro(r), r.qtd,
+        decimalBR(r.valorPeca), decimalBR(r.total), decimalBR(r.custoTotal), decimalBR(r.lucro),
+        ROTULOS_SITUACAO[situacao(r, hoje)], r.reenvios || 0
+      ].map(function (v, i) { return celulaCSV(v, !!texto[i]); }).join(';'));
+    });
+    return '﻿' + linhas.join('\r\n') + '\r\n';
   }
 
   var Dados = {
@@ -336,7 +516,12 @@
     situacao: situacao, normalizarBusca: normalizarBusca, filtrarRegistros: filtrarRegistros, resumir: resumir,
     agruparPorDia: agruparPorDia, hora: hora, descreverEnvio: descreverEnvio, validadeCurta: validadeCurta,
     ultimosClientes: ultimosClientes, materialDoRegistro: materialDoRegistro, materialParaEnvio: materialParaEnvio,
-    descricaoLinha: descricaoLinha, orcamentoDeRegistro: orcamentoDeRegistro, precisaLembreteBackup: precisaLembreteBackup
+    descricaoLinha: descricaoLinha, orcamentoDeRegistro: orcamentoDeRegistro, precisaLembreteBackup: precisaLembreteBackup,
+    BACKUP_APP: BACKUP_APP, BACKUP_FORMATO: BACKUP_FORMATO, MAX_ARQUIVO_BACKUP: MAX_ARQUIVO_BACKUP, ERROS_BACKUP: ERROS_BACKUP, COLUNAS_CSV: COLUNAS_CSV,
+    montarDados: montarDados, montarBackup: montarBackup, nomeArquivoBackup: nomeArquivoBackup, nomeArquivoCSV: nomeArquivoCSV,
+    lerBackup: lerBackup, resumoBackup: resumoBackup, descreverOrcamentos: descreverOrcamentos, juntarRegistros: juntarRegistros,
+    restaurarDados: restaurarDados, desfazerRestauracao: desfazerRestauracao, descreverBackup: descreverBackup,
+    textoLembreteBackup: textoLembreteBackup, gerarCSV: gerarCSV, dataBR: dataBR
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = Dados; }
   root.Dados = Dados;

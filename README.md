@@ -34,7 +34,7 @@ Padrões das configurações: PLA a R$ 150,00 o rolo de 1000 g, hora R$ 2,25/h, 
 |---|---|
 | `index.html` | Telas e visual |
 | `calc.js` | Regras de cálculo, leitura de tempo e texto do orçamento |
-| `dados.js` | Registro dos envios, histórico (busca, período, resumo), situação e "usar de novo" |
+| `dados.js` | Registro dos envios, histórico (busca, período, resumo), situação, "usar de novo", backup/restauração e planilha (CSV) |
 | `orcamento-img.js` | Desenha o orçamento em imagem (JPG) com logo, em canvas, sem internet; reduz o logo enviado pelo cliente |
 | `app.js` | Funcionamento das telas, configurações salvas, botão copiar, envio do orçamento (texto ou imagem), numeração e registro dos envios |
 | `config-ambiente.js` | Nome do ambiente (produção ou teste), prefixo do cache e chave das configurações salvas |
@@ -75,6 +75,14 @@ O que muda entre os dois fica só em `config-ambiente.js`, `manifest.webmanifest
 - **Android:** abra no **Chrome** → toque em **Instalar** no aviso do app, ou menu ⋮ → **Instalar app**.
 
 Depois de instalado, abra uma vez com internet. A partir daí funciona em modo avião.
+
+## Backup e planilha
+
+Em **Configurações › Backup**:
+- **Fazer backup** gera `backup-orcamento-3di-AAAA-MM-DD.json` (configurações, filamentos, logo, catálogo, orçamentos, contador e filamento atual) e abre o compartilhamento do celular; sem suporte, baixa o arquivo. Só conta como backup feito quando o envio ou o download acontece. O arquivo tem custos e clientes: não enviar para cliente.
+- **Restaurar** pede o arquivo e mostra um resumo antes de aplicar: substitui configurações, logo, catálogo e filamento; junta os orçamentos sem repetir (mesmo nº e mesma data/hora); o próximo número nunca repete. **Desfazer restauração** fica disponível até o próximo backup ou restauração.
+- **Planilha** exporta o histórico inteiro em CSV (`;`, vírgula decimal, UTF-8 com BOM) para Excel/Planilhas. É de uso interno (tem custo e lucro).
+- No **Histórico** aparece uma faixa de lembrete quando há 20 ou mais orçamentos desde o último backup.
 
 ## Atualizar o app
 

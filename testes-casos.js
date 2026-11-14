@@ -467,12 +467,104 @@
     igual('validade curta', D.validadeCurta('2026-11-21', hojeH) + '|' + D.validadeCurta('2027-01-05', hojeH) + '|' + D.validadeCurta('', hojeH), '21/11|05/01/2027|');
     igual('rótulos de situação', ['enviado', 'aprovado', 'recusado', 'vencido'].map(function (k) { return D.ROTULOS_SITUACAO[k]; }).join(','), 'Enviado,Aprovado,Recusado,Vencido');
 
-    // lembrete de backup: pronto, mas só será exibido na etapa do backup
+    // lembrete de backup
     var muitos = []; for (var q = 1; q <= 20; q++) muitos.push(mkReg(q, 0));
     igual('lembrete: sem backup, 20 orçamentos = mostrar', JSON.stringify(D.precisaLembreteBackup(muitos, null)), '{"mostrar":true,"qtd":20}');
     igual('lembrete: sem backup, 19 orçamentos = não mostrar', D.precisaLembreteBackup(muitos.slice(1), null).mostrar, false);
     igual('lembrete: conta só os depois do backup', JSON.stringify(D.precisaLembreteBackup(muitos, { em: em(0, 10, 30).toISOString() })), '{"mostrar":false,"qtd":' + muitos.filter(function (x) { return new Date(x.ts) > em(0, 10, 30); }).length + '}');
     igual('lembrete: limite padrão 20', D.LIMITE_LEMBRETE_BACKUP, 20);
+
+    /* ---- v4 · etapa 3: backup, restauração e planilha (dados.js) ---- */
+    var LOGO = 'data:image/png;base64,iVBORw0KGgo=';
+    var cfgBackup = { precoKg: 150, valorHora: 2.25, perdaPct: 5, minimo: 0, materiais: [{ id: 'pla', nome: 'PLA', preco: 150, pesoG: 1000 }, { id: 'petg', nome: 'PETG', preco: 130, pesoG: 1000 }], materialPadrao: 'pla' };
+    var regsBk = [mkReg(1, 5, { cliente: 'Ana', entrada: D.montarEntrada(entPlanilha), versaoApp: '0.4.0' }), mkReg(2, 3), mkReg(3, 1, { status: 'aprovado', statusEm: em(1, 9).toISOString() })];
+    var aparelho = { config: cfgBackup, logo: LOGO, contador: 3, registros: regsBk, catalogo: [{ id: 'c1', nome: 'Suporte' }], materialAtual: 'petg' };
+    var arqBk = D.montarBackup(aparelho, { ambiente: 'producao', versaoApp: '0.4.0', criadoEm: em(0, 18, 40) });
+    igual('backup: cabeçalho do arquivo', [arqBk.app, arqBk.formato, arqBk.ambiente, arqBk.versaoApp, arqBk.criadoEm === em(0, 18, 40).toISOString()].join('|'), 'orcamentador-3di|1|producao|0.4.0|true');
+    igual('backup: dados guardados', Object.keys(arqBk.dados).join(','), 'config,logo,contador,registros,catalogo,materialAtual');
+    igual('backup: versaoApp do staging aceita o sufixo', D.montarBackup(aparelho, { versaoApp: '0.4.0-teste.3' }).versaoApp, '0.4.0-teste.3');
+    igual('backup: nome do arquivo', D.nomeArquivoBackup(hojeH), 'backup-orcamento-3di-2026-11-14.json');
+    igual('backup: nome da planilha', D.nomeArquivoCSV(hojeH), 'orcamentos-3di-2026-11-14.csv');
+    var lido = D.lerBackup(JSON.stringify(arqBk));
+    igual('backup: ida e volta (exportar → restaurar) dá os mesmos dados', lido.ok + '|' + JSON.stringify(lido.backup.dados), 'true|' + JSON.stringify(D.montarDados(aparelho)));
+    igual('backup: ida e volta mantém entrada e situação dos orçamentos', lido.backup.dados.registros[0].entrada.materialNome + '|' + lido.backup.dados.registros[2].status, 'PLA|aprovado');
+    igual('backup: arquivo com BOM é lido', D.lerBackup('﻿' + JSON.stringify(arqBk)).ok, true);
+    igual('backup: sem logo e sem catálogo', JSON.stringify(D.lerBackup(JSON.stringify(D.montarBackup({ config: cfgBackup, contador: 1, registros: [] }, {}))).backup.dados.catalogo) + '|' + D.lerBackup(JSON.stringify(D.montarBackup({ config: cfgBackup }, {}))).backup.dados.logo + '|', '[]||');
+    igual('backup: logo que não é imagem é descartado', D.montarDados({ logo: 'javascript:alert(1)' }).logo, '');
+    igual('backup: registros inválidos são descartados na leitura', D.lerBackup(JSON.stringify({ app: 'orcamentador-3di', formato: 1, dados: { registros: [regsBk[0], null, { n: 'x' }, 7] } })).backup.dados.registros.length, 1);
+    igual('backup: catálogo guarda no máximo 100 peças', D.montarDados({ catalogo: new Array(130).fill({ id: 'x' }) }).catalogo.length, 100);
+    function erroBk(txt) { var r = D.lerBackup(txt); return r.ok ? 'ok' : r.erro; }
+    igual('backup inválido: texto que não é JSON', erroBk('isto não é json'), 'invalido');
+    igual('backup inválido: JSON de outro app', erroBk('{"app":"outro","formato":1,"dados":{}}'), 'invalido');
+    igual('backup inválido: sem dados', erroBk('{"app":"orcamentador-3di","formato":1}'), 'invalido');
+    igual('backup inválido: lista em vez de arquivo', erroBk('[1,2]'), 'invalido');
+    igual('backup inválido: formato que não é número', erroBk('{"app":"orcamentador-3di","formato":"1","dados":{}}'), 'invalido');
+    igual('backup inválido: arquivo da planilha', erroBk('Nº;Data;Hora'), 'invalido');
+    igual('backup de formato mais novo pede atualizar o app', erroBk('{"app":"orcamentador-3di","formato":2,"dados":{}}'), 'novo');
+    igual('backup: mensagens de erro', D.ERROS_BACKUP.invalido + ' / ' + D.ERROS_BACKUP.novo, 'Este arquivo não é um backup do Orçamento 3DI. / Backup feito numa versão mais nova. Atualize o app.');
+    igual('backup: arquivo grande demais não é lido', erroBk(new Array(D.MAX_ARQUIVO_BACKUP + 2).join('a')), 'grande');
+    igual('backup de outro ambiente é aceito', D.lerBackup(JSON.stringify(D.montarBackup(aparelho, { ambiente: 'teste' }))).backup.ambiente, 'teste');
+    var rb = D.resumoBackup(lido.backup);
+    igual('resumo do backup', [rb.filamentos, rb.temLogo, rb.pecas, rb.orcamentos, rb.numMin, rb.numMax].join('|'), '2|true|1|3|1|3');
+    igual('resumo: texto dos orçamentos', D.descreverOrcamentos(rb) + ' / ' + D.descreverOrcamentos({ orcamentos: 1, numMin: 7, numMax: 7 }) + ' / ' + D.descreverOrcamentos({ orcamentos: 0 }), '3 orçamentos (Nº 0001 a 0003) / 1 orçamento (Nº 0007) / Nenhum orçamento');
+
+    // restaurar: substitui configurações, logo, catálogo e filamento; junta orçamentos; contador pelo maior
+    var celular = { config: { precoKg: 99, materiais: [{ id: 'abs', nome: 'ABS', preco: 99, pesoG: 1000 }], materialPadrao: 'abs' }, logo: 'data:image/png;base64,AAAA', contador: 6,
+      registros: [mkReg(3, 1, { status: 'recusado' }), mkReg(5, 0), mkReg(6, 0)], catalogo: [], materialAtual: 'abs' };
+    var rest = D.restaurarDados(celular, lido.backup.dados);
+    igual('restaurar: substitui configurações, logo, catálogo e filamento atual', JSON.stringify(rest.config) + '|' + (rest.logo === LOGO) + '|' + rest.catalogo.length + '|' + rest.materialAtual, JSON.stringify(cfgBackup) + '|true|1|petg');
+    igual('restaurar: junta os orçamentos sem repetir (mesmo nº + data/hora) e em ordem de data', rest.registros.map(function (r) { return r.n; }).join(','), '1,2,3,5,6');
+    igual('restaurar: no registro repetido vale o deste aparelho', rest.registros.filter(function (r) { return r.n === 3; })[0].status, 'recusado');
+    igual('restaurar: contador = o maior (do aparelho)', rest.contador, 6);
+    igual('restaurar: contador = o maior (do backup)', D.restaurarDados({ contador: 2, registros: [] }, { contador: 128, registros: [] }).contador, 128);
+    igual('restaurar: o próximo número nunca repete um registro que existe', D.restaurarDados({ contador: 0, registros: [mkReg(9, 0)] }, { contador: 4, registros: [] }).contador, 9);
+    igual('restaurar: mesmo nº com data/hora diferente são dois registros', D.juntarRegistros([mkReg(7, 0)], [mkReg(7, 3)]).length, 2);
+    igual('restaurar: backup sem logo tira o logo deste aparelho', D.restaurarDados(celular, D.montarDados({ config: cfgBackup })).logo, '');
+    igual('restaurar: não muda o objeto do aparelho nem do backup', celular.registros.length + '|' + lido.backup.dados.registros.length, '3|3');
+    var muitosR = []; for (var qq = 1; qq <= 2005; qq++) muitosR.push(mkReg(qq, 40 - Math.floor(qq / 100), { ts: new Date(2026, 0, 1, 0, qq).toISOString() }));
+    var juntos = D.juntarRegistros(muitosR.slice(0, 1500), muitosR.slice(1000), 2000);
+    igual('restaurar: limite de 2.000 orçamentos (saem os mais antigos)', juntos.length + '|' + juntos[0].n + '|' + juntos[1999].n, '2000|6|2005');
+
+    // desfazer a restauração
+    var antes = { em: em(0, 18, 50).toISOString(), dados: D.montarDados(celular) };
+    var depoisRest = D.restaurarDados(celular, lido.backup.dados);
+    var novoEnvio = mkReg(7, 0, { ts: em(0, 19, 5).toISOString() });
+    var aposDepois = { config: depoisRest.config, logo: depoisRest.logo, contador: 7, registros: D.juntarRegistros(depoisRest.registros, [novoEnvio]), catalogo: depoisRest.catalogo, materialAtual: depoisRest.materialAtual };
+    var desfeito = D.desfazerRestauracao(aposDepois, antes);
+    igual('desfazer: volta configurações, logo, catálogo e filamento', JSON.stringify(desfeito.config) + '|' + desfeito.logo + '|' + desfeito.catalogo.length + '|' + desfeito.materialAtual, JSON.stringify(celular.config) + '|data:image/png;base64,AAAA|0|abs');
+    igual('desfazer: tira os orçamentos do backup e mantém os enviados depois', desfeito.registros.map(function (r) { return r.n; }).join(','), '3,5,6,7');
+    igual('desfazer: contador não volta atrás', desfeito.contador, 7);
+    igual('desfazer: sem estado guardado válido não quebra', D.desfazerRestauracao(aposDepois, null).registros.length >= 1, true);
+
+    // situação do cartão Backup e lembrete
+    var umDia = []; for (var u = 1; u <= 9; u++) umDia.push(mkReg(u, 0, { ts: em(0, 12, u).toISOString() }));
+    igual('cartão: nenhum backup, nenhum orçamento', JSON.stringify(D.descreverBackup(null, [], hojeH)), '{"titulo":"Nenhum backup feito ainda","detalhe":""}');
+    igual('cartão: nenhum backup, com orçamentos', D.descreverBackup(null, umDia, hojeH).detalhe + '|' + D.descreverBackup(null, umDia.slice(0, 1), hojeH).detalhe, '9 orçamentos ainda sem backup|1 orçamento ainda sem backup');
+    var bkAntigo = { em: new Date(2026, 10, 2, 18, 40).toISOString(), qtd: 3 };
+    igual('cartão: último backup, há 12 dias e orçamentos depois dele', JSON.stringify(D.descreverBackup(bkAntigo, umDia, hojeH)), '{"titulo":"Último backup: 02/11/2026","detalhe":"há 12 dias · 9 orçamentos depois dele"}');
+    igual('cartão: backup de hoje, sem orçamento depois', JSON.stringify(D.descreverBackup({ em: em(0, 17).toISOString() }, [], hojeH)), '{"titulo":"Último backup: 14/11/2026","detalhe":"hoje · nenhum orçamento depois dele"}');
+    igual('cartão: ontem e 1 orçamento depois', D.descreverBackup({ em: em(1, 9).toISOString() }, [mkReg(1, 0)], hojeH).detalhe, 'ontem · 1 orçamento depois dele');
+    igual('cartão: backup com data inválida vale como nenhum', D.descreverBackup({ em: 'lixo' }, [], hojeH).titulo, 'Nenhum backup feito ainda');
+    igual('lembrete: texto com e sem backup', D.textoLembreteBackup(21, bkAntigo) + ' / ' + D.textoLembreteBackup(1, null), '21 orçamentos desde o último backup. / 1 orçamento sem backup.');
+    igual('lembrete: depois do backup a contagem recomeça', D.precisaLembreteBackup(muitos, { em: em(0, 23).toISOString() }).qtd, 0);
+
+    // planilha (CSV)
+    var csvRegs = [
+      mkReg(2, 0, { cliente: 'Zé; "Pé" Ltda', descricao: 'Chaveiro\nlogo', qtd: 50, valorPeca: 1.59, total: 79.5, custoTotal: 40.25, lucro: 39.25, status: 'recusado', formato: 'imagem', reenvios: 2 }),
+      mkReg(1, 9, { cliente: 'José', descricao: 'Vaso geométrico', qtd: 1, valorPeca: 1234.5, total: 1234.5, custoTotal: 600, lucro: 634.5, validadeAte: '2026-11-12', entrada: D.montarEntrada(entPlanilha) }),
+      mkReg(3, 1, { cliente: '=SOMA(A1)', lucro: -2.5 })
+    ];
+    var csv = D.gerarCSV(csvRegs, hojeH), linhasCsv = csv.split('\r\n');
+    igual('planilha: começa com BOM e termina com quebra de linha', (csv.charCodeAt(0) === 0xFEFF) + '|' + (linhasCsv[linhasCsv.length - 1] === ''), 'true|true');
+    igual('planilha: colunas', linhasCsv[0].replace('﻿', ''), 'Nº;Data;Hora;Formato;Cliente;Peça;Material;Quantidade;Valor por peça;Total;Custo total;Lucro;Situação;Reenvios');
+    igual('planilha: uma linha por orçamento, do mais antigo para o mais novo', linhasCsv.length + '|' + linhasCsv[1].split(';')[0] + ',' + linhasCsv[2].split(';')[0], '5|0001,0003');
+    igual('planilha: acento, vírgula decimal e situação calculada (vencido)', linhasCsv[1], '0001;05/11/2026;' + D.hora(csvRegs[1].ts) + ';Texto;José;Vaso geométrico;PLA;1;1234,50;1234,50;600,00;634,50;Vencido;0');
+    igual('planilha: fórmula não é interpretada e lucro negativo sai com sinal', linhasCsv[2], '0003;13/11/2026;' + D.hora(csvRegs[2].ts) + ";Texto;'=SOMA(A1);;;1;10,00;10,00;5,00;-2,50;Enviado;0");
+    igual('planilha: ; e aspas entre aspas, aspas dobradas e quebra de linha dentro do campo', csv.indexOf('"Zé; ""Pé"" Ltda";"Chaveiro\nlogo"') > -1, true);
+    igual('planilha: imagem recusada com reenvios', csv.indexOf(';Imagem;') > -1 && csv.indexOf(';79,50;40,25;39,25;Recusado;2') > -1, true);
+    igual('planilha: sem orçamento só tem o cabeçalho', D.gerarCSV([], hojeH).split('\r\n').filter(Boolean).length, 1);
+    igual('planilha: não muda a lista original', csvRegs[0].n + ',' + csvRegs[1].n, '2,1');
+    igual('planilha: aceita registro com 2.000 linhas', D.gerarCSV(muitosR.slice(0, 2000).map(function (r) { return D.lerRegistro(r); }), hojeH).split('\r\n').length, 2002);
 
     return resultados;
   }
