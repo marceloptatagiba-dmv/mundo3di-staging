@@ -1,7 +1,8 @@
 // Teste das regras de cálculo: node teste-calculo.js
 var C = require('./calc.js');
+var D = require('./dados.js');
 var T = require('./testes-casos.js');
-var resultados = T.executar(C);
+var resultados = T.executar(C, D);
 
 /* Só no node: confere os config-ambiente.js dos dois ambientes e o service worker (versão MAJOR.MINOR.PATCH, nome do cache) */
 var fs = require('fs'), path = require('path'), vm = require('vm');

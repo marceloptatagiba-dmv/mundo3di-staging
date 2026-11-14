@@ -67,6 +67,7 @@ pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;bac
 </main>
 
 <script src="calc.js"></script>
+<script src="dados.js"></script>
 <script src="testes-casos.js"></script>
 <script>
 (function () {
@@ -84,7 +85,7 @@ pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;bac
   $('amb').textContent = 'Ambiente: ' + A.nome + ' · cache ' + A.prefixoCache + '-v' + (A.versao || '…');
 
   // 1. cálculo
-  var res = window.Testes3DI.executar(window.Calc);
+  var res = window.Testes3DI.executar(window.Calc, window.Dados);
   var falhas = res.filter(function (r) { return !r.ok; });
   linha($('l-calc'), falhas.length ? 'falha' : 'ok', falhas.length ? falhas.length + ' de ' + res.length + ' casos falharam' : 'Todos os ' + res.length + ' casos passaram',
     'Inclui o caso da planilha: 5 g, 10 min → R$ 2,36');

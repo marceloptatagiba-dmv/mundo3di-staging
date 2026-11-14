@@ -269,6 +269,7 @@
   });
 
   /* ---------- Numeração e registro dos envios (só neste aparelho) ---------- */
+  var D = window.Dados;
   var CHAVE_CONT = CHAVE + '-contador';     // último número usado
   var CHAVE_REG = CHAVE + '-registros';     // lista de envios com data e hora
   var CHAVE_LOGO = CHAVE + '-logo';         // logo do cliente (dataURL, até 400 px)
@@ -280,44 +281,98 @@
     try { n = parseInt(localStorage.getItem(CHAVE_CONT) || '0', 10) || 0; } catch (e) {}
     return n + 1;
   }
-  /* Grava o envio: avança o contador e guarda o registro com data e hora. Chamado só quando o envio aconteceu. */
+  function lerLista() {
+    try { return D.lerRegistros(JSON.parse(localStorage.getItem(CHAVE_REG) || '[]')); } catch (e) { return []; }
+  }
+  function gravarLista(lista) {
+    try { localStorage.setItem(CHAVE_REG, JSON.stringify(lista)); return true; } catch (e) { avisar('Não deu para salvar'); return false; }
+  }
+  /* O que está digitado na mesa agora (guardado no registro para "Usar de novo") */
+  function entradaAtual() {
+    var fil = filamentoAtual();
+    var o = { peso: C.lerNumero(ePeso.value), tempoMin: C.lerTempo(eTempo.value), qtd: C.lerQuantidade(eQtd.value),
+      extras: C.lerNumero(eExtras.value), margem: C.lerNumero(eMargem.value), materialId: fil.id, materialNome: fil.nome };
+    if (multicorAtivo) {
+      o.cores = cores.map(function (c) {
+        var f = materialPorId(config, c.id) || fil;
+        return { materialId: f.id, nome: f.nome, gramas: C.lerNumero(c.g) };
+      });
+      o.purgaG = C.lerNumero(purgaTxt);
+    }
+    return D.montarEntrada(o);
+  }
+  /* Grava o envio novo: avança o contador e guarda o registro com data e hora. Chamado só quando o envio aconteceu. */
   function registrarEnvio(numero, formato, extra) {
-    var reg = C.novoRegistro(ultimoOrcamento, { numero: numero, formato: formato, material: extra.material, cliente: extra.cliente, descricao: extra.descricao });
+    var reg = D.novoRegistro(extra.orcamento, { numero: numero, formato: formato, material: extra.material, cliente: extra.cliente,
+      descricao: extra.descricao, entrada: extra.entrada, prazo: extra.prazo, validadeAte: extra.validadeAte, versaoApp: versaoEmUso });
     try {
       localStorage.setItem(CHAVE_CONT, String(numero));
       var lista = JSON.parse(localStorage.getItem(CHAVE_REG) || '[]');
-      localStorage.setItem(CHAVE_REG, JSON.stringify(C.adicionarRegistro(lista, reg, C.MAX_REGISTROS)));
+      localStorage.setItem(CHAVE_REG, JSON.stringify(D.adicionarRegistro(lista, reg, D.MAX_REGISTROS)));
     } catch (e) { /* armazenamento indisponível: o envio continua valendo, só não fica registrado */ }
+  }
+  /* Reenvio: mesmo número, o contador não anda; soma 1 em "reenvios" */
+  function registrarReenvio(reg, extra) {
+    var m = { reenvios: (reg.reenvios || 0) + 1, cliente: extra.cliente };
+    if (extra.formato === 'imagem') { m.descricao = extra.descricao; m.prazo = extra.prazo; }
+    gravarLista(D.atualizarRegistro(lerLista(), D.chaveRegistro(reg), m));
+    if (!$('tela-hist').hidden) desenharHist();
   }
 
   /* ---------- Enviar orçamento: painel com Texto ou Imagem ---------- */
-  var folha = $('folha'), eImgCliente = $('img-cliente'), eImgDesc = $('img-descricao'), eImgPrazo = $('img-prazo');
-  var imagem = null;            // { arquivo, url, numero } — imagem já pronta para enviar
+  var folha = $('folha'), eCliente = $('env-cliente'), eImgDesc = $('img-descricao'), eImgPrazo = $('img-prazo');
+  var imagem = null;            // { arquivo, url, numero, data, validadeAte } — imagem já pronta para enviar
   var tokenImagem = 0, timerImagem;
+  var envioReg = null;          // null = orçamento novo · registro = reenvio daquele orçamento
 
-  function nomeFilamentoEnvio() { return config.mostrarMaterial ? (multicorAtivo ? (nomesCores() ? nomesCores() + ' (multicor)' : '') : filamentoAtual().nome) : ''; }
+  function nomeFilamentoEnvio() {
+    if (envioReg) return D.materialParaEnvio(envioReg, config.mostrarMaterial);
+    return config.mostrarMaterial ? (multicorAtivo ? (nomesCores() ? nomesCores() + ' (multicor)' : '') : filamentoAtual().nome) : '';
+  }
+  function orcamentoEnvio() { return envioReg ? D.orcamentoDeRegistro(envioReg) : ultimoOrcamento; }
+  function numeroEnvio() { return envioReg ? envioReg.n : proximoNumero(); }
   function whatsappTexto(texto) { window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener'); }
 
-  function abrirFolha() {
-    if (!ultimoOrcamento || ultimoOrcamento.valorCobrar <= 0) { avisar('Preencha peso e tempo primeiro'); return; }
-    eImgCliente.value = ''; eImgDesc.value = ''; eImgPrazo.value = config.negocio.prazo;
+  function desenharChipsClientes() {
+    var box = $('env-clientes'); box.textContent = '';
+    var nomes = envioReg ? [] : D.ultimosClientes(lerLista(), 3);
+    nomes.forEach(function (nome) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'chip claro'; b.textContent = nome;
+      b.addEventListener('click', function () { eCliente.value = nome; agendarImagem(); });
+      box.appendChild(b);
+    });
+    box.hidden = nomes.length === 0;
+  }
+
+  function abrirFolha(reg) {
+    envioReg = reg || null;
+    if (!envioReg && (!ultimoOrcamento || ultimoOrcamento.valorCobrar <= 0)) { avisar('Preencha peso e tempo primeiro'); return; }
+    eCliente.value = envioReg ? envioReg.cliente : '';
+    eImgDesc.value = envioReg ? envioReg.descricao : '';
+    eImgPrazo.value = envioReg && envioReg.prazo ? envioReg.prazo : config.negocio.prazo;
     $('painel-imagem').hidden = true; $('abrir-imagem').setAttribute('aria-pressed', 'false');
-    $('folha-numero').textContent = 'Nº ' + C.formatarNumero(proximoNumero());
+    $('folha-rotulo').textContent = envioReg ? 'Reenviar orçamento' : 'Enviar orçamento';
+    $('folha-numero').textContent = 'Nº ' + C.formatarNumero(numeroEnvio());
+    desenharChipsClientes();
     descartarImagem();
     folha.hidden = false;
-    $('enviar-texto').focus();
+    $('enviar-texto').focus();      // o campo Cliente não pega o foco: abrir o teclado atrapalharia quem não usa
   }
   function fecharFolha() { folha.hidden = true; tokenImagem++; clearTimeout(timerImagem); descartarImagem(); }
-  $('whatsapp').addEventListener('click', abrirFolha);
+  $('whatsapp').addEventListener('click', function () { abrirFolha(null); });
   $('folha-fechar').addEventListener('click', fecharFolha);
   $('folha-fundo').addEventListener('click', fecharFolha);
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !folha.hidden) fecharFolha(); });
 
   /* Texto: compartilhamento nativo; sem suporte (ou erro), abre o WhatsApp */
   $('enviar-texto').addEventListener('click', function () {
-    var numero = proximoNumero();
-    var texto = C.textoOrcamento(ultimoOrcamento, { material: nomeFilamentoEnvio(), numero: numero, negocio: config.negocio.nome });
-    var registrar = function () { registrarEnvio(numero, 'texto', { material: nomeFilamentoEnvio() }); };
+    var reg = envioReg, numero = numeroEnvio(), orc = orcamentoEnvio(), entrada = reg ? null : entradaAtual();
+    var cliente = D.limparTexto(eCliente.value, 60);
+    var texto = C.textoOrcamento(orc, { material: nomeFilamentoEnvio(), numero: numero, negocio: config.negocio.nome });
+    var registrar = function () {
+      if (reg) registrarReenvio(reg, { formato: 'texto', cliente: cliente });
+      else registrarEnvio(numero, 'texto', { orcamento: orc, material: nomeFilamentoEnvio(), cliente: cliente, entrada: entrada });
+    };
     fecharFolha();
     if (navigator.share) {
       navigator.share({ text: texto }).then(registrar, function (e) {
@@ -334,21 +389,27 @@
     $('img-previa').hidden = true; $('img-previa').removeAttribute('src');
     $('enviar-imagem').disabled = true;
   }
-  function dadosDaImagem(numero) {
-    return C.dadosOrcamento(ultimoOrcamento, {
-      negocio: config.negocio, numero: numero, data: new Date(), material: nomeFilamentoEnvio(),
-      cliente: eImgCliente.value, descricao: eImgDesc.value, prazo: eImgPrazo.value
+  /* Data e validade: orçamento novo = hoje + validade do negócio · reenvio = os do orçamento original */
+  function datasEnvio() {
+    if (envioReg) return { data: new Date(envioReg.ts), validadeAte: envioReg.validadeAte || '' };
+    var d = new Date(), dias = config.negocio.validadeDias;
+    return { data: d, validadeAte: dias > 0 ? D.dataISO(D.somarDias(d, dias)) : '' };
+  }
+  function dadosDaImagem(numero, datas) {
+    return C.dadosOrcamento(orcamentoEnvio(), {
+      negocio: config.negocio, numero: numero, data: datas.data, validadeAte: datas.validadeAte, material: nomeFilamentoEnvio(),
+      cliente: eCliente.value, descricao: eImgDesc.value, prazo: eImgPrazo.value
     });
   }
   function prepararImagem() {
-    var meu = ++tokenImagem, numero = proximoNumero();
+    var meu = ++tokenImagem, numero = numeroEnvio(), datas = datasEnvio();
     $('img-estado').textContent = 'Preparando a imagem…';
     $('enviar-imagem').disabled = true;
-    OrcamentoImg.gerar(dadosDaImagem(numero), lerLogoSalvo() || LOGO_3DI).then(function (blob) {
+    OrcamentoImg.gerar(dadosDaImagem(numero, datas), lerLogoSalvo() || LOGO_3DI).then(function (blob) {
       if (meu !== tokenImagem) return;
       var antigo = imagem; if (antigo) URL.revokeObjectURL(antigo.url);
       var arquivo = new File([blob], 'orcamento-' + C.formatarNumero(numero) + '.jpg', { type: 'image/jpeg' });
-      imagem = { arquivo: arquivo, url: URL.createObjectURL(blob), numero: numero };
+      imagem = { arquivo: arquivo, url: URL.createObjectURL(blob), numero: numero, validadeAte: datas.validadeAte };
       $('img-previa').src = imagem.url; $('img-previa').hidden = false;
       $('img-estado').textContent = Math.round(blob.size / 1024) + ' KB · pronta para enviar';
       $('enviar-imagem').disabled = false;
@@ -365,9 +426,8 @@
   $('abrir-imagem').addEventListener('click', function () {
     $('painel-imagem').hidden = false; $('abrir-imagem').setAttribute('aria-pressed', 'true');
     prepararImagem();
-    eImgCliente.focus();
   });
-  [eImgCliente, eImgDesc, eImgPrazo].forEach(function (el) { el.addEventListener('input', agendarImagem); selecionarAoFocar(el); });
+  [eCliente, eImgDesc, eImgPrazo].forEach(function (el) { el.addEventListener('input', agendarImagem); selecionarAoFocar(el); });
 
   function baixarImagem(img) {
     var a = document.createElement('a');
@@ -377,9 +437,11 @@
   $('enviar-imagem').addEventListener('click', function () {
     var img = imagem;
     if (!img) return;
-    var extra = { material: nomeFilamentoEnvio(), cliente: C.dadosOrcamento(ultimoOrcamento, { cliente: eImgCliente.value }).cliente,
-      descricao: eImgDesc.value.trim().slice(0, 120) };
-    var registrar = function () { registrarEnvio(img.numero, 'imagem', extra); fecharFolha(); };
+    var reg = envioReg, orc = orcamentoEnvio(), entrada = reg ? null : entradaAtual();
+    var extra = { orcamento: orc, formato: 'imagem', material: nomeFilamentoEnvio(), cliente: D.limparTexto(eCliente.value, 60),
+      descricao: D.limparTexto(eImgDesc.value, 120), prazo: D.limparTexto(eImgPrazo.value, 40), validadeAte: img.validadeAte, entrada: entrada };
+    var gravar = function () { if (reg) registrarReenvio(reg, extra); else registrarEnvio(img.numero, 'imagem', extra); };
+    var registrar = function () { gravar(); fecharFolha(); };
     if (navigator.canShare && navigator.canShare({ files: [img.arquivo] })) {
       navigator.share({ files: [img.arquivo] }).then(registrar, function (e) {
         if (!e || e.name !== 'AbortError') { baixarImagem(img); registrar(); }
@@ -387,7 +449,7 @@
     } else {
       baixarImagem(img);               // sem compartilhamento de arquivo: baixa o JPG
       avisar('Imagem salva no aparelho');
-      registrarEnvio(img.numero, 'imagem', extra);
+      gravar();
       setTimeout(fecharFolha, 2000);    // dá tempo do download começar antes de liberar o arquivo
     }
   });
@@ -646,18 +708,190 @@
     avisar('Padrões restaurados — toque em Salvar');
   });
 
+  /* ---------- Histórico de orçamentos ---------- */
+  var LEMBRETE_BACKUP_ATIVO = false;   // o lembrete entra na etapa do backup (v4, item 2); a faixa já existe, escondida
+  var histPeriodo = '30', histBusca = '', histLimite = 50, histTimerBusca;
+  var detChave = null;                 // orçamento aberto no detalhe
+
+  function el(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt !== undefined) e.textContent = txt;
+    return e;
+  }
+  function desenharHist() {
+    var todos = lerLista(), hoje = new Date();
+    var lista = D.filtrarRegistros(todos, { periodo: histPeriodo, busca: histBusca, hoje: hoje });
+    var res = D.resumir(lista);
+    $('hist-n').textContent = String(res.qtd);
+    $('hist-total').textContent = moeda(res.total);
+    $('hist-apr').textContent = String(res.aprovados);
+    Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.per === histPeriodo));
+    });
+    var lemb = LEMBRETE_BACKUP_ATIVO ? D.precisaLembreteBackup(todos, null) : { mostrar: false, qtd: 0 };
+    $('hist-lembrete').hidden = !lemb.mostrar;
+    if (lemb.mostrar) $('hist-lembrete-txt').textContent = lemb.qtd + ' orçamentos desde o último backup.';
+
+    var box = $('hist-lista'); box.textContent = '';
+    var vazio = $('hist-vazio');
+    if (!lista.length) {
+      vazio.hidden = false;
+      vazio.textContent = !todos.length ? 'Nenhum orçamento enviado ainda. Cada envio, em texto ou imagem, aparece aqui.'
+        : histBusca ? 'Nada encontrado para “' + histBusca + '”.' : 'Nenhum orçamento neste período. Toque em Tudo para ver todos.';
+    } else { vazio.hidden = true; }
+    D.agruparPorDia(lista.slice(0, histLimite), hoje).forEach(function (g) {
+      box.appendChild(el('div', 'dia', g.rotulo));
+      var bloco = el('div', 'lista-hist');
+      g.itens.forEach(function (r) {
+        var it = el('button', 'item'); it.type = 'button';
+        var meio = el('span', 'meio');
+        meio.appendChild(el('span', 'sup', 'Nº ' + C.formatarNumero(r.n) + ' · ' + D.hora(r.ts) + ' · ' + (r.formato === 'imagem' ? 'Imagem' : 'Texto')));
+        meio.appendChild(el('strong', r.cliente ? '' : 'sem', r.cliente || 'Sem cliente'));
+        meio.appendChild(el('span', 'peca', D.descricaoLinha(r)));
+        var dir = el('span', 'dir');
+        dir.appendChild(el('b', '', moeda(r.total)));
+        var st = D.situacao(r, hoje);
+        dir.appendChild(el('span', 'pill ' + st, D.ROTULOS_SITUACAO[st]));
+        it.appendChild(meio); it.appendChild(dir);
+        it.addEventListener('click', function () { abrirDetalhe(r); });
+        bloco.appendChild(it);
+      });
+      box.appendChild(bloco);
+    });
+    $('hist-mais').hidden = lista.length <= histLimite;
+  }
+  $('hist-busca').addEventListener('input', function () {
+    clearTimeout(histTimerBusca);
+    histTimerBusca = setTimeout(function () { histBusca = $('hist-busca').value.trim(); histLimite = 50; desenharHist(); }, 150);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
+    b.addEventListener('click', function () { histPeriodo = b.dataset.per; histLimite = 50; desenharHist(); });
+  });
+  $('hist-mais').addEventListener('click', function () { histLimite += 50; desenharHist(); });
+
+  /* Detalhe do orçamento */
+  var folhaDet = $('folha-det'), folhaExcluir = $('folha-excluir');
+  function regAberto() {
+    var l = lerLista();
+    for (var i = 0; i < l.length; i++) if (D.chaveRegistro(l[i]) === detChave) return l[i];
+    return null;
+  }
+  function dm(iso) { var d = new Date(iso); return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2); }
+  function desenharDetalhe(reg) {
+    var hoje = new Date(), st = D.situacao(reg, hoje);
+    $('det-numero').textContent = 'Nº ' + C.formatarNumero(reg.n);
+    var sub = D.descreverEnvio(reg, hoje);
+    if (reg.validadeAte) sub += ' · validade até ' + D.validadeCurta(reg.validadeAte, hoje);
+    if (reg.reenvios > 0) sub += ' · reenviado ' + reg.reenvios + (reg.reenvios === 1 ? ' vez' : ' vezes');
+    $('det-sub').textContent = sub;
+    $('det-cliente').value = reg.cliente; $('det-peca').value = reg.descricao;
+    $('det-qtd').textContent = reg.qtd > 1 ? reg.qtd + ' × ' + moeda(reg.valorPeca) : '1 peça';
+    var mat = D.materialDoRegistro(reg);
+    $('det-mat').textContent = [mat, reg.entrada ? 'margem ' + num(reg.entrada.margem) + '%' : ''].filter(Boolean).join(' · ');
+    $('det-total').textContent = moeda(reg.total);
+    $('det-custo').textContent = moeda(reg.custoTotal);
+    $('det-lucro').textContent = moeda(reg.lucro);
+    Array.prototype.forEach.call($('det-seg').querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.st === reg.status)); });
+    $('det-st-info').textContent = st === 'vencido' ? 'Venceu em ' + D.validadeCurta(reg.validadeAte, hoje) + '. Marque Aprovado ou Recusado quando o cliente responder.'
+      : reg.statusEm && reg.status !== 'enviado' ? D.ROTULOS_SITUACAO[reg.status] + ' em ' + dm(reg.statusEm) : '';
+    $('det-antigo').hidden = !!reg.entrada;
+    $('det-usar').disabled = !reg.entrada;
+    $('det-catalogo').disabled = true;          // o catálogo chega na etapa 4
+    $('det-cat-nota').hidden = false;
+  }
+  function abrirDetalhe(reg) {
+    detChave = D.chaveRegistro(reg);
+    desenharDetalhe(reg);
+    folhaDet.hidden = false;
+  }
+  function guardarEdicao() {
+    var reg = detChave && regAberto();
+    if (!reg) return;
+    var c = D.limparTexto($('det-cliente').value, 60), p = D.limparTexto($('det-peca').value, 120);
+    if (c === reg.cliente && p === reg.descricao) return;
+    gravarLista(D.atualizarRegistro(lerLista(), detChave, { cliente: c, descricao: p }));
+    desenharHist();
+  }
+  function fecharDetalhe() { guardarEdicao(); folhaDet.hidden = true; detChave = null; }
+  function fecharSheetsHist() { folhaDet.hidden = true; folhaExcluir.hidden = true; detChave = null; }
+  $('det-fechar').addEventListener('click', fecharDetalhe);
+  $('det-fundo').addEventListener('click', fecharDetalhe);
+  ['det-cliente', 'det-peca'].forEach(function (id) { $(id).addEventListener('change', guardarEdicao); selecionarAoFocar($(id)); });
+  Array.prototype.forEach.call($('det-seg').querySelectorAll('button'), function (b) {
+    b.addEventListener('click', function () {
+      var reg = regAberto();
+      if (!reg || reg.status === b.dataset.st) return;
+      guardarEdicao();
+      if (gravarLista(D.atualizarRegistro(lerLista(), detChave, { status: b.dataset.st }))) { desenharDetalhe(regAberto()); desenharHist(); }
+    });
+  });
+  $('det-reenviar').addEventListener('click', function () {
+    guardarEdicao();
+    var reg = regAberto(); if (!reg) return;
+    folhaDet.hidden = true; detChave = null;
+    abrirFolha(reg);
+  });
+  $('det-usar').addEventListener('click', function () {
+    guardarEdicao();
+    var reg = regAberto(); if (!reg || !reg.entrada) return;
+    fecharSheetsHist();
+    usarDeNovo(reg);
+  });
+  $('det-excluir').addEventListener('click', function () {
+    var reg = regAberto(); if (!reg) return;
+    $('excluir-txt').textContent = 'O orçamento Nº ' + C.formatarNumero(reg.n) + ' sai do histórico. O número dele não volta: o próximo orçamento continua de onde parou.';
+    folhaExcluir.hidden = false;
+  });
+  function fecharExcluir() { folhaExcluir.hidden = true; }
+  $('excluir-nao').addEventListener('click', fecharExcluir);
+  $('excluir-fundo').addEventListener('click', fecharExcluir);
+  $('excluir-sim').addEventListener('click', function () {
+    if (!detChave) return;
+    if (gravarLista(D.excluirRegistro(lerLista(), detChave))) { fecharSheetsHist(); desenharHist(); avisar('Orçamento excluído'); }
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (!folhaExcluir.hidden) fecharExcluir(); else if (!folhaDet.hidden) fecharDetalhe();
+  });
+
+  /* Usar de novo: devolve à tela principal os dados da mesa daquele orçamento (o próximo envio ganha número novo) */
+  function usarDeNovo(reg) {
+    var c = D.entradaParaCampos(reg.entrada);
+    if (!c) return;
+    var aviso = '';
+    ePeso.value = c.peso; eTempo.value = c.tempo; eQtd.value = c.qtd; eExtras.value = c.extras; eMargem.value = c.margem;
+    outraAberta = c.outra;
+    if (c.multicor) {
+      multicorAtivo = true; purgaTxt = c.purga;
+      cores = c.cores.map(function (x) { return { id: materialPorId(config, x.id) ? x.id : null, g: x.g }; });
+      if (c.cores.some(function (x) { return !materialPorId(config, x.id); })) aviso = 'Algum filamento não existe mais: usei o filamento atual nessas cores';
+    } else {
+      multicorAtivo = false; purgaTxt = '';
+      var m = materialPorId(config, c.materialId);
+      if (m) { materialAtual = m.id; try { localStorage.setItem(CHAVE_MAT, materialAtual); } catch (e) {} }
+      else if (c.materialNome) aviso = 'O filamento “' + c.materialNome + '” não existe mais: usei ' + filamentoAtual().nome;
+    }
+    montarSeletor(); aplicarModoMulticor(); atualizar();
+    sairConfig();
+    avisar(aviso || 'Dados do orçamento Nº ' + C.formatarNumero(reg.n) + ' na tela');
+  }
+
   /* ---------- Navegação (o botão voltar do Android funciona) ---------- */
+  function telaDaRota() { return location.hash === '#config' ? 'config' : location.hash === '#historico' ? 'hist' : 'calc'; }
   function mostrar(tela) {
-    var cfg = tela === 'config';
-    $('tela-calc').hidden = cfg;
-    $('tela-config').hidden = !cfg;
-    if (cfg) { preencherConfig(config); configInicial = JSON.stringify(lerConfigTela()); }
+    $('tela-calc').hidden = tela !== 'calc';
+    $('tela-config').hidden = tela !== 'config';
+    $('tela-hist').hidden = tela !== 'hist';
+    if (tela === 'config') { preencherConfig(config); configInicial = JSON.stringify(lerConfigTela()); }
+    if (tela === 'hist') desenharHist(); else fecharSheetsHist();
     desenharVersao();
     window.scrollTo(0, 0);
   }
   function rota() {
-    if (location.hash !== '#config') veioDaCalc = false;
-    mostrar(location.hash === '#config' ? 'config' : 'calc');
+    var t = telaDaRota();
+    if (t === 'calc') veioDaCalc = false;
+    mostrar(t);
   }
   window.addEventListener('hashchange', rota);
   var veioDaCalc = false;
@@ -666,7 +900,9 @@
     else { history.replaceState(null, '', location.pathname + location.search); rota(); }
   }
   $('ir-config').addEventListener('click', function () { veioDaCalc = true; location.hash = 'config'; });
+  $('ir-hist').addEventListener('click', function () { veioDaCalc = true; location.hash = 'historico'; });
   $('voltar').addEventListener('click', sairConfig);
+  $('hist-voltar').addEventListener('click', sairConfig);
 
   /* ---------- Convite para instalar ---------- */
   var instalado = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;

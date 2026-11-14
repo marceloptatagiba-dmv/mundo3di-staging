@@ -190,6 +190,66 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 .aviso.versao{width:min(330px,calc(100vw - 24px));text-align:center;line-height:1.35}
 .aviso.versao span{display:block;font-size:12px;font-weight:600;color:var(--suave-escuro)}
 .aviso.versao span:empty{display:none}
+
+/* ---- Histórico de orçamentos (v4, etapa 2) ---- */
+.marca{min-width:0}
+.icones{display:flex;gap:8px;flex-shrink:0}
+.icone.novo{border-color:var(--verde);color:var(--verde-texto)}
+@media (max-width:379px){.marca span{display:none}}
+#tela-hist main{gap:10px;padding-top:12px}
+.caixa.busca{height:44px;background:#fff}
+.caixa.busca input{font-size:16px;font-weight:500;-webkit-appearance:none;appearance:none}
+.caixa.busca input::-webkit-search-cancel-button{-webkit-appearance:none}
+.chips{display:flex;gap:6px;flex-wrap:nowrap}
+.chip{flex:1;min-width:0;height:36px;padding:0 6px;border-radius:999px;border:1.5px solid var(--borda);background:#fff;font-size:13px;font-weight:700;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--preto);border-color:var(--preto);color:#fff}
+.chip.claro{flex:none;height:32px;font-size:12px;font-weight:600;padding:0 12px;background:var(--fundo);border-color:var(--linha);max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.chips.clientes{flex-wrap:wrap}
+.chips[hidden]{display:none}
+.resumo{background:#fff;border-radius:16px;padding:12px 16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.resumo .num{display:flex;flex-direction:column;gap:2px;min-width:0}
+.resumo .num b{font-size:16px;font-weight:800;overflow-wrap:anywhere}
+.resumo .num span{font-size:11px;font-weight:600;color:var(--suave)}
+.resumo .num.apr b{color:#2F6402}
+.dia{margin:6px 2px -2px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--suave)}
+.lista-hist{background:#fff;border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
+.item{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;border:0;border-top:1px solid var(--linha);background:#fff;text-align:left;color:var(--preto)}
+.item:first-child{border-top:0}
+.item .meio{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.item .meio strong{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .meio strong.sem{color:#6B7367;font-weight:600}
+.item .meio span.peca{font-size:12px;font-weight:500;color:var(--suave);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .sup{font-size:11px;font-weight:700;color:var(--suave);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.item .sup svg{flex-shrink:0}
+.item .dir{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.item .dir b{font-size:15px;font-weight:800;white-space:nowrap}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.pill.enviado{background:#EEF1EC;color:#4A524A}
+.pill.aprovado{background:#E3F0D5;color:#2F6402}
+.pill.recusado{background:#F7E4DB;color:#8F2F08}
+.pill.vencido{background:#FDF0D6;color:#8A4B04}
+.pill.cat{background:#EEF5E6;color:#3A7A03}
+.vazio{margin:18px 8px;text-align:center;font-size:14px;font-weight:500;line-height:1.5;color:var(--suave)}
+.vazio[hidden]{display:none}
+.faixa-backup{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 14px;border-radius:14px;background:#FDF0D6;border:1.5px solid #F2D49B;font-size:13px;font-weight:600;color:#5C3303}
+.faixa-backup[hidden]{display:none}
+.faixa-backup p{margin:0;flex:1;line-height:1.35}
+.interno{background:var(--fundo);border:1.5px dashed var(--borda);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.interno .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--suave)}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1.5px solid var(--borda);border-radius:12px;overflow:hidden}
+.seg button{height:44px;border:0;border-left:1.5px solid var(--borda);background:#fff;font-size:13px;font-weight:700;padding:0}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--suave);color:#fff}
+.seg button[aria-pressed="true"][data-st="aprovado"]{background:var(--verde)}
+.seg button[aria-pressed="true"][data-st="recusado"]{background:#8F2F08}
+.btn.perigo{color:#A3360A;border-color:#E9C9B8}
+.btn.peq{height:44px;font-size:14px}
+.btn:disabled{opacity:.4;cursor:default}
+.folha-topo i{font-style:normal;color:var(--preto)}
+.folha-corpo .linha .rot strong{font-size:14px}
+.nota-antigo{margin:0;font-size:12px;font-weight:600;line-height:1.4;color:#8A4B04}
+.nota-antigo[hidden]{display:none}
+.ajuda[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -202,9 +262,14 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
         <img src="img/logo-3di.png" alt="3Di" width="77" height="46">
         <div><strong>Mundo 3DI</strong><span>Orçamento de peças 3D</span></div>
       </div>
+      <div class="icones">
+      <button class="icone novo" type="button" id="ir-hist" aria-label="Orçamentos enviados">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+      </button>
       <button class="icone" type="button" id="ir-config" aria-label="Configurações">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
+      </div>
     </header>
 
     <main>
@@ -437,6 +502,37 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
     </main>
   </section>
 
+  <!-- TELA: HISTÓRICO DE ORÇAMENTOS -->
+  <section class="tela" id="tela-hist" aria-label="Orçamentos enviados" hidden>
+    <header>
+      <button class="icone" type="button" id="hist-voltar" aria-label="Voltar">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      </button>
+      <h1>Orçamentos</h1>
+    </header>
+    <main>
+      <div class="bloco" id="hist-controles" style="gap:10px">
+        <label class="caixa busca"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4A524A" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="hist-busca" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar cliente, peça ou nº" aria-label="Buscar"></label>
+        <div class="chips" role="group" aria-label="Período">
+          <button class="chip" type="button" data-per="hoje" aria-pressed="false">Hoje</button>
+          <button class="chip" type="button" data-per="7" aria-pressed="false">7 dias</button>
+          <button class="chip" type="button" data-per="30" aria-pressed="true">30 dias</button>
+          <button class="chip" type="button" data-per="tudo" aria-pressed="false">Tudo</button>
+        </div>
+        <section class="resumo" aria-live="polite" aria-label="Resumo do período">
+          <div class="num"><b id="hist-n">0</b><span>enviados</span></div>
+          <div class="num"><b id="hist-total">R$ 0,00</b><span>em orçamentos</span></div>
+          <div class="num apr"><b id="hist-apr">0</b><span id="hist-apr-txt">aprovados</span></div>
+        </section>
+        <!-- Lembrete de backup: preparado para a etapa do backup (item 2); fica escondido nesta etapa -->
+        <div class="faixa-backup" id="hist-lembrete" hidden><p id="hist-lembrete-txt"></p></div>
+      </div>
+      <div id="hist-lista"></div>
+      <p class="vazio" id="hist-vazio" hidden></p>
+      <button class="btn mais" type="button" id="hist-mais" hidden>Mostrar mais</button>
+    </main>
+  </section>
+
 </div>
 <!-- PAINEL: ENVIAR ORÇAMENTO (texto ou imagem) -->
 <div class="folha" id="folha-cores" hidden>
@@ -461,19 +557,21 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
   <div class="folha-fundo" id="folha-fundo"></div>
   <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="folha-titulo">
     <div class="folha-topo">
-      <strong id="folha-titulo">Enviar orçamento <span id="folha-numero"></span></strong>
+      <strong id="folha-titulo"><i id="folha-rotulo">Enviar orçamento</i> <span id="folha-numero"></span></strong>
       <button class="fechar" type="button" id="folha-fechar" aria-label="Fechar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
+    <label class="campo"><span>Cliente (opcional)</span>
+      <span class="caixa texto"><input id="env-cliente" type="text" maxlength="60" autocomplete="off" placeholder="Nome do cliente"></span>
+    </label>
+    <div class="chips clientes" id="env-clientes" hidden></div>
+    <p class="ajuda neutra" id="env-ajuda">Vale para texto e imagem. Fica guardado só no seu histórico; o texto enviado ao cliente não muda.</p>
     <div class="grade2">
       <button class="btn grande" type="button" id="enviar-texto">Texto</button>
       <button class="btn grande" type="button" id="abrir-imagem" aria-pressed="false">Imagem</button>
     </div>
     <div class="bloco" id="painel-imagem" hidden>
-      <label class="campo"><span>Nome do cliente (opcional)</span>
-        <span class="caixa texto"><input id="img-cliente" type="text" maxlength="60" autocomplete="off"></span>
-      </label>
       <label class="campo"><span>Descrição da peça (opcional)</span>
         <span class="caixa texto"><input id="img-descricao" type="text" maxlength="120" autocomplete="off" placeholder="Peça impressa em 3D"></span>
       </label>
@@ -486,6 +584,58 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
       </div>
       <button class="btn principal" type="button" id="enviar-imagem" disabled>Enviar imagem</button>
     </div>
+  </div>
+</div>
+
+<!-- PAINEL: DETALHE DO ORÇAMENTO (histórico) -->
+<div class="folha" id="folha-det" hidden>
+  <div class="folha-fundo" id="det-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="det-titulo" style="gap:10px">
+    <div class="folha-topo">
+      <strong id="det-titulo"><i>Orçamento</i> <span id="det-numero"></span></strong>
+      <button class="fechar" type="button" id="det-fechar" aria-label="Fechar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p class="ajuda neutra" id="det-sub" style="margin-top:-8px"></p>
+    <div class="grade2">
+      <label class="campo"><span>Cliente</span><span class="caixa texto"><input id="det-cliente" type="text" maxlength="60" autocomplete="off" placeholder="Sem cliente"></span></label>
+      <label class="campo"><span>Peça</span><span class="caixa texto"><input id="det-peca" type="text" maxlength="120" autocomplete="off" placeholder="Sem descrição"></span></label>
+    </div>
+    <div class="linha"><div class="rot"><strong id="det-qtd"></strong><span id="det-mat"></span></div><span class="val" id="det-total" style="font-size:18px;font-weight:800"></span></div>
+    <div class="interno"><span class="tag">Só você vê</span>
+      <div class="linha"><div class="rot"><strong>Custo total</strong></div><span class="val" id="det-custo"></span></div>
+      <div class="linha"><div class="rot"><strong>Lucro</strong></div><span class="val" id="det-lucro" style="font-weight:800"></span></div>
+    </div>
+    <div class="campo"><span>Situação</span>
+      <div class="seg" id="det-seg" role="group" aria-label="Situação">
+        <button type="button" data-st="enviado" aria-pressed="false">Enviado</button>
+        <button type="button" data-st="aprovado" aria-pressed="false">Aprovado</button>
+        <button type="button" data-st="recusado" aria-pressed="false">Recusado</button>
+      </div>
+      <span class="ajuda neutra" id="det-st-info"></span>
+    </div>
+    <p class="nota-antigo" id="det-antigo" hidden>Orçamento anterior à versão 0.4.0: sem os dados da mesa.</p>
+    <div class="grade2">
+      <button class="btn" type="button" id="det-reenviar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/></svg>Reenviar</button>
+      <button class="btn" type="button" id="det-usar">Usar de novo</button>
+    </div>
+    <div class="grade2">
+      <button class="btn mais peq" type="button" id="det-catalogo" disabled>Salvar no catálogo</button>
+      <button class="btn mais peq perigo" type="button" id="det-excluir">Excluir</button>
+    </div>
+    <p class="ajuda neutra" id="det-cat-nota" hidden>O catálogo chega numa próxima versão.</p>
+  </div>
+</div>
+
+<!-- PAINEL: CONFIRMAR EXCLUSÃO -->
+<div class="folha" id="folha-excluir" hidden>
+  <div class="folha-fundo" id="excluir-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="excluir-titulo">
+    <div class="folha-topo"><strong id="excluir-titulo">Excluir este orçamento?</strong></div>
+    <p class="ajuda" id="excluir-txt"></p>
+    <button class="btn principal" type="button" id="excluir-sim" style="background:#A3360A">Excluir</button>
+    <button class="btn" type="button" id="excluir-nao">Cancelar</button>
   </div>
 </div>
 
@@ -513,6 +663,7 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 <div class="aviso" id="aviso" role="status"></div>
 
 <script src="calc.js"></script>
+<script src="dados.js"></script>
 <script src="orcamento-img.js"></script>
 <script src="app.js"></script>
 </body>

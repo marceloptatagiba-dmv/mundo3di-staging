@@ -12,7 +12,7 @@ if (!AMB || typeof AMB.versao !== 'string' || !/^\d+\.\d+\.\d+(-teste\.\d+)?$/.t
 var PREFIXO = AMB.prefixoCache;
 var VERSAO = PREFIXO + '-v' + AMB.versao;
 var ARQUIVOS = [
-  './', 'index.html', 'calc.js', 'orcamento-img.js', 'app.js', 'config-ambiente.js', 'manifest.webmanifest',
+  './', 'index.html', 'calc.js', 'dados.js', 'orcamento-img.js', 'app.js', 'config-ambiente.js', 'manifest.webmanifest',
   'img/logo-3di.png',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
   'icons/apple-touch-icon.png', 'icons/favicon-32.png',

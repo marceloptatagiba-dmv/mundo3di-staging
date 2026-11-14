@@ -34,6 +34,7 @@ Padrões das configurações: PLA a R$ 150,00 o rolo de 1000 g, hora R$ 2,25/h, 
 |---|---|
 | `index.html` | Telas e visual |
 | `calc.js` | Regras de cálculo, leitura de tempo e texto do orçamento |
+| `dados.js` | Registro dos envios, histórico (busca, período, resumo), situação e "usar de novo" |
 | `orcamento-img.js` | Desenha o orçamento em imagem (JPG) com logo, em canvas, sem internet; reduz o logo enviado pelo cliente |
 | `app.js` | Funcionamento das telas, configurações salvas, botão copiar, envio do orçamento (texto ou imagem), numeração e registro dos envios |
 | `config-ambiente.js` | Nome do ambiente (produção ou teste), prefixo do cache e chave das configurações salvas |

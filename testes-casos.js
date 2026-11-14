@@ -3,7 +3,7 @@
 (function (root) {
   'use strict';
 
-  function executar(C) {
+  function executar(C, D) {
     var resultados = [];
     var NB = /[  ]/g;
     function m(n) { return C.moeda(n).replace(NB, ' '); }
@@ -201,15 +201,15 @@
     igual('texto com nome do negócio', C.textoOrcamento(r3, { numero: 12, negocio: 'Oficina X', material: 'PETG' }).replace(NB, ' '),
       '*Orçamento Nº 0012 — Oficina X*\n3 peças impressas em 3D\nMaterial: PETG\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
     igual('texto sem nº continua igual à v2', C.textoOrcamento(r1).replace(NB, ' '), '*Orçamento — Mundo 3DI*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
-    var reg = C.novoRegistro(re, { numero: 9, formato: 'imagem', quando: new Date(Date.UTC(2026, 10, 14, 18, 30)), material: 'PLA', cliente: 'Ana', descricao: 'Vaso' });
+    var reg = D.novoRegistro(re, { numero: 9, formato: 'imagem', quando: new Date(Date.UTC(2026, 10, 14, 18, 30)), material: 'PLA', cliente: 'Ana', descricao: 'Vaso' });
     igual('registro: nº, formato e data/hora', reg.n + ' ' + reg.formato + ' ' + reg.ts, '9 imagem 2026-11-14T18:30:00.000Z');
     igual('registro: valores (qtd 2, extras R$ 1,50)', [reg.qtd, reg.valorPeca, reg.total, reg.custoTotal, reg.lucro].join('/'), '2/4.18/8.36/4.18/4.18');
     igual('registro: cliente, material e peça', reg.cliente + '|' + reg.material + '|' + reg.descricao, 'Ana|PLA|Vaso');
-    igual('registro: formato desconhecido vira texto', C.novoRegistro(r1, { numero: 1, formato: 'x' }).formato, 'texto');
+    igual('registro: formato desconhecido vira texto', D.novoRegistro(r1, { numero: 1, formato: 'x' }).formato, 'texto');
     var lista = [];
-    for (var j = 1; j <= 5; j++) lista = C.adicionarRegistro(lista, { n: j }, 3);
+    for (var j = 1; j <= 5; j++) lista = D.adicionarRegistro(lista, { n: j }, 3);
     igual('registros: mantém os 3 mais recentes', lista.map(function (x) { return x.n; }).join(','), '3,4,5');
-    igual('registros: lista inválida começa do zero', C.adicionarRegistro(null, { n: 1 }).length, 1);
+    igual('registros: lista inválida começa do zero', D.adicionarRegistro(null, { n: 1 }).length, 1);
 
     // v3 · 4. arredondamento (sempre para cima, no valor por peça)
     function arr(v, modo) { return C.arredondarCima(v, modo); }
@@ -325,6 +325,154 @@
     igual('aviso: MINOR sem novidade cadastrada = só o título', av('0.5.0', '0.4.0'), 'Atualizado para a 0.5.0 / ');
     igual('aviso: mesma versão, mais antiga ou inválida = nada', av('0.4.0', '0.4.0') + '|' + av('0.3.0', '0.4.0') + '|' + av('0.4.0', 'lixo') + '|' + av('', '0.3.0'), 'null|null|null|null');
     igual('aviso: staging para produção da mesma versão', av('0.4.0', '0.4.0-teste.3'), 'Atualizado para a 0.4.0 / ');
+
+    /* ---- v4 · etapa 2: registro com os dados digitados e histórico de orçamentos (dados.js) ---- */
+    var hojeH = new Date(2026, 10, 14, 18, 0);            // sábado, 14/11/2026 (hora local, o mesmo fuso das datas dos registros)
+    function em(dias, h, min) { return new Date(2026, 10, 14 - dias, h === undefined ? 12 : h, min || 0); }
+    function mkReg(n, dias, extra) {
+      var o = Object.assign({ n: n, ts: em(dias, 10 + (n % 8)).toISOString(), formato: 'texto', qtd: 1, valorPeca: 10, total: 10, custoTotal: 5, lucro: 5, material: '', cliente: '', descricao: '', status: 'enviado', reenvios: 0 }, extra || {});
+      return o;
+    }
+
+    // item 0 · registro com a entrada
+    var entPlanilha = { peso: 5, tempoMin: 10, qtd: 1, extras: 0, margem: 100, materialId: 'pla', materialNome: 'PLA' };
+    var regNovo = D.novoRegistro(r1, { numero: 14, formato: 'imagem', quando: em(0, 16, 48), material: 'PLA', cliente: 'Ana Souza', descricao: 'Suporte de celular',
+      entrada: entPlanilha, prazo: '5 dias úteis', validadeAte: '2026-11-21', versaoApp: '0.4.0-teste.2' });
+    igual('registro v4: entrada gravada', JSON.stringify(regNovo.entrada), JSON.stringify({ peso: 5, tempoMin: 10, qtd: 1, extras: 0, margem: 100, materialId: 'pla', materialNome: 'PLA' }));
+    igual('registro v4: versaoApp, situação, reenvios, prazo e validade', [regNovo.versaoApp, regNovo.status, regNovo.reenvios, regNovo.prazo, regNovo.validadeAte].join('|'), '0.4.0-teste.2|enviado|0|5 dias úteis|2026-11-21');
+    igual('registro v4: sem catálogo não grava catalogoId nem statusEm', 'catalogoId' in regNovo || 'statusEm' in regNovo, false);
+    igual('registro v4: tamanho razoável (~400 bytes; com entrada cabe em 800)', JSON.stringify(regNovo).length < 800, true);
+    igual('registro v4: sem entrada informada não inventa entrada', 'entrada' in D.novoRegistro(r1, { numero: 1 }), false);
+    igual('registro v4: cliente do painel vai para o registro também no envio em texto', D.novoRegistro(r1, { numero: 1, formato: 'texto', cliente: '  Ana   Souza ' }).cliente, 'Ana Souza');
+    igual('registro v4: versão do staging é aceita (com sufixo)', D.novoRegistro(r1, { numero: 1, versaoApp: '0.4.0-teste.2' }).versaoApp, '0.4.0-teste.2');
+    var entMulti = { peso: 40, tempoMin: 155, qtd: 3, extras: 1.5, margem: 80, materialId: 'pla', materialNome: 'PLA',
+      cores: [{ materialId: 'pla', nome: 'PLA', gramas: 30 }, { materialId: 'petg', nome: 'PETG', gramas: 10 }], purgaG: 8 };
+    var eM = D.montarEntrada(entMulti);
+    igual('entrada multicor: cores e purga', eM.cores.length + '|' + eM.cores[1].nome + '|' + eM.purgaG, '2|PETG|8');
+    igual('entrada: sem cores não grava purga', 'purgaG' in D.montarEntrada({ peso: 5, tempoMin: 10, qtd: 1, purgaG: 9 }), false);
+    igual('entrada: limite de 8 cores', D.montarEntrada({ cores: new Array(12).fill({ nome: 'x', gramas: 1 }) }).cores.length, 8);
+    igual('entrada: inválida vira null', D.montarEntrada(null) + '|' + D.montarEntrada('x'), 'null|null');
+    igual('entrada: valores negativos e lixo viram 0 e quantidade mínima 1', JSON.stringify(D.montarEntrada({ peso: -3, tempoMin: 'x', qtd: 0, extras: NaN, margem: -1 })),
+      '{"peso":0,"tempoMin":0,"qtd":1,"extras":0,"margem":0,"materialId":"","materialNome":""}');
+
+    // texto de volta para os campos (textoCampo e textoTempo precisam voltar ao mesmo valor)
+    [[5, '5'], [48.37, '48,37'], [1234.5, '1234,5'], [1000, '1000'], [0.0375, '0,0375'], [100, '100'], [0, ''], [-2, ''], [NaN, '']].forEach(function (t) {
+      igual('textoCampo ' + t[0], D.textoCampo(t[0]), t[1]);
+    });
+    [1234.5, 48.37, 1000, 7, 0.5].forEach(function (n) { igual('textoCampo volta ao mesmo número ' + n, C.lerNumero(D.textoCampo(n)), n); });
+    [[155, '2h35'], [120, '2h00'], [60, '1h00'], [45, '45'], [10, '10'], [1, '1'], [12.5, '12,5'], [0, ''], [600, '10h00'], [605, '10h05']].forEach(function (t) {
+      igual('textoTempo ' + t[0], D.textoTempo(t[0]), t[1]);
+    });
+    [10, 45, 60, 155, 120, 12.5, 0.5, 599, 1440].forEach(function (mi) { igual('textoTempo volta ao mesmo tempo ' + mi, C.lerTempo(D.textoTempo(mi)), mi); });
+    var cp = D.entradaParaCampos(entPlanilha);
+    igual('usar de novo: campos da planilha', [cp.peso, cp.tempo, cp.qtd, cp.extras, cp.margem, cp.outra, cp.multicor].join('|'), '5|10|1||100|false|false');
+    igual('usar de novo recalcula: planilha dá R$ 2,36 com os preços de hoje', m(C.calcular({ peso: C.lerNumero(cp.peso), tempo: C.lerTempo(cp.tempo), qtd: C.lerQuantidade(cp.qtd),
+      extrasPeca: C.lerNumero(cp.extras), margemPct: C.lerNumero(cp.margem), precoKg: 150, valorHora: 2.25, perdaPct: 5 }).valorCobrar), 'R$ 2,36');
+    igual('usar de novo recalcula com preços novos (rolo a R$ 200/kg)', m(C.calcular({ peso: C.lerNumero(cp.peso), tempo: C.lerTempo(cp.tempo), precoKg: 200, valorHora: 2.25, perdaPct: 5, margemPct: C.lerNumero(cp.margem) }).valorCobrar), 'R$ 2,89');
+    var cm = D.entradaParaCampos(entMulti);
+    igual('usar de novo multicor: cores, purga e margem 80 (atalho)', [cm.multicor, cm.peso, cm.cores.map(function (c) { return c.id + ':' + c.g; }).join(','), cm.purga, cm.margem, cm.outra, cm.tempo, cm.qtd, cm.extras].join('|'),
+      'true||pla:30,petg:10|8|80|false|2h35|3|1,5');
+    igual('usar de novo: margem fora dos atalhos abre "Outra"', D.entradaParaCampos({ peso: 1, tempoMin: 1, qtd: 1, margem: 85.5 }).outra + '|' + D.entradaParaCampos({ peso: 1, tempoMin: 1, qtd: 1, margem: 85.5 }).margem, 'true|85,5');
+    igual('usar de novo: registro antigo (sem entrada) não tem campos', D.entradaParaCampos(undefined), null);
+    // o orçamento recalculado a partir dos campos devolvidos é o mesmo da época (mesmos preços): mesa de 3 peças com extras, margem 80
+    var rEnt = C.calcular({ peso: 15, tempo: 30, qtd: 3, extrasPeca: 1.5, margemPct: 80, precoKg: 150, valorHora: 2.25, perdaPct: 5 });
+    var cE = D.entradaParaCampos(D.montarEntrada({ peso: 15, tempoMin: 30, qtd: 3, extras: 1.5, margem: 80 }));
+    var rVolta = C.calcular({ peso: C.lerNumero(cE.peso), tempo: C.lerTempo(cE.tempo), qtd: C.lerQuantidade(cE.qtd), extrasPeca: C.lerNumero(cE.extras), margemPct: C.lerNumero(cE.margem), precoKg: 150, valorHora: 2.25, perdaPct: 5 });
+    igual('usar de novo: mesmos preços, mesmo valor', m(rVolta.valorCobrar) + ' ' + m(rVolta.valorUnitario), m(rEnt.valorCobrar) + ' ' + m(rEnt.valorUnitario));
+
+    // registros antigos (v3, sem os campos novos) continuam abrindo
+    var antigo = { n: 3, ts: em(2, 9).toISOString(), formato: 'imagem', qtd: 2, valorPeca: 4.18, total: 8.36, custoTotal: 4.18, lucro: 4.18, material: 'PLA', cliente: 'Ana', descricao: 'Vaso' };
+    var lidos = D.lerRegistros([antigo, null, 7, { n: 'x', ts: 'lixo' }, { n: 1 }, { n: 5, ts: 'não é data' }]);
+    igual('registro antigo: lista lê só os válidos', lidos.length, 1);
+    igual('registro antigo: sem entrada, situação enviado, 0 reenvios', ('entrada' in lidos[0]) + '|' + lidos[0].status + '|' + lidos[0].reenvios + '|' + ('versaoApp' in lidos[0]), 'false|enviado|0|false');
+    igual('registro antigo: dados preservados', [lidos[0].n, lidos[0].cliente, lidos[0].total, lidos[0].material].join('|'), '3|Ana|8.36|PLA');
+    igual('registros: lista que não é lista vira vazia', D.lerRegistros(null).length + '|' + D.lerRegistros('x').length, '0|0');
+    igual('registro: situação desconhecida volta a enviado', D.lerRegistros([Object.assign({}, antigo, { status: 'cancelado' })])[0].status, 'enviado');
+    igual('registro: ida e volta (ler o que foi gravado) não muda nada', JSON.stringify(D.lerRegistros([regNovo])[0]), JSON.stringify(regNovo));
+
+    // item 1 · período, busca, resumo
+    var base30 = [
+      mkReg(14, 0, { cliente: 'Ana Souza', descricao: 'Suporte de celular', qtd: 10, total: 62.41, formato: 'imagem' }),
+      mkReg(13, 0, { cliente: 'Oficina do Léo', total: 17.48, status: 'aprovado' }),
+      mkReg(12, 0, { total: 27.33 }),
+      mkReg(11, 1, { cliente: 'Marina Lopes', descricao: 'Vaso geométrico', total: 60.17, status: 'aprovado' }),
+      mkReg(10, 1, { cliente: 'José Carlos', total: 79.5, status: 'recusado' }),
+      mkReg(9, 9, { cliente: 'Escola Arco-Íris', total: 95, validadeAte: '2026-11-12' }),
+      mkReg(8, 40, { cliente: 'Antigo', total: 20 })
+    ];
+    var ids = function (l) { return l.map(function (x) { return x.n; }).join(','); };
+    igual('período hoje', ids(D.filtrarRegistros(base30, { periodo: 'hoje', hoje: hojeH })), '14,13,12');
+    igual('período 7 dias (hoje e os 6 anteriores)', ids(D.filtrarRegistros(base30, { periodo: '7', hoje: hojeH })), '14,13,12,11,10');
+    igual('período 30 dias (padrão)', ids(D.filtrarRegistros(base30, { hoje: hojeH })), '14,13,12,11,10,9');
+    igual('período tudo', ids(D.filtrarRegistros(base30, { periodo: 'tudo', hoje: hojeH })), '14,13,12,11,10,9,8');
+    igual('período: borda dos 7 dias (6 dias atrás entra, 7 não)', ids(D.filtrarRegistros([mkReg(1, 6), mkReg(2, 7)], { periodo: '7', hoje: hojeH })), '1');
+    igual('ordem: do mais novo para o mais antigo', ids(D.filtrarRegistros([mkReg(1, 3), mkReg(2, 0), mkReg(3, 1)], { periodo: 'tudo', hoje: hojeH })), '2,3,1');
+    igual('busca por cliente sem diferenciar acento e maiúscula', ids(D.filtrarRegistros(base30, { busca: 'JOSE', periodo: 'tudo', hoje: hojeH })), '10');
+    igual('busca por cliente com acento digitado', ids(D.filtrarRegistros(base30, { busca: 'léo', periodo: 'tudo', hoje: hojeH })), '13');
+    igual('busca pela peça', ids(D.filtrarRegistros(base30, { busca: 'suporte', periodo: 'tudo', hoje: hojeH })), '14');
+    igual('busca pelo nº (com e sem zeros)', ids(D.filtrarRegistros(base30, { busca: '0011', periodo: 'tudo', hoje: hojeH })) + '|' + ids(D.filtrarRegistros(base30, { busca: '8', periodo: 'tudo', hoje: hojeH })), '11|8');
+    igual('busca vazia ou só espaços não filtra', ids(D.filtrarRegistros(base30, { busca: '   ', hoje: hojeH })), '14,13,12,11,10,9');
+    igual('busca respeita o período', ids(D.filtrarRegistros(base30, { busca: 'antigo', hoje: hojeH })) + '|' + ids(D.filtrarRegistros(base30, { busca: 'antigo', periodo: 'tudo', hoje: hojeH })), '|8');
+    igual('normalizarBusca', D.normalizarBusca('  José   AÇAÍ ') , 'jose acai');
+    var res = D.resumir(D.filtrarRegistros(base30, { hoje: hojeH }));
+    igual('resumo: enviados, soma e aprovados', res.qtd + '|' + res.total + '|' + res.aprovados + '|' + res.totalAprovados, '6|341.89|2|77.65');
+    igual('resumo: lista vazia', JSON.stringify(D.resumir([])), '{"qtd":0,"total":0,"aprovados":0,"totalAprovados":0}');
+    igual('resumo: soma em centavos (0,10 + 0,20 = 0,30)', D.resumir([mkReg(1, 0, { total: 0.1 }), mkReg(2, 0, { total: 0.2 })]).total, 0.3);
+    var dias = D.agruparPorDia(D.filtrarRegistros(base30, { periodo: 'tudo', hoje: hojeH }), hojeH);
+    igual('agrupar por dia: rótulos', dias.map(function (g) { return g.rotulo + '(' + g.itens.length + ')'; }).join(' · '), 'Hoje(3) · Ontem(2) · Qui, 05/11(1) · Seg, 05/10(1)');
+    igual('agrupar por dia: outro ano mostra o ano', D.agruparPorDia([mkReg(1, 400)], hojeH)[0].rotulo, 'Sex, 10/10/2025');
+    igual('agrupar por dia: lista vazia', D.agruparPorDia([], hojeH).length, 0);
+
+    // situação: Vencido é calculado, não gravado
+    igual('situação: enviado com validade passada = vencido', D.situacao(base30[5], hojeH), 'vencido');
+    igual('situação: último dia da validade ainda vale', D.situacao(mkReg(1, 0, { validadeAte: '2026-11-14' }), hojeH) + '|' + D.situacao(mkReg(1, 0, { validadeAte: '2026-11-13' }), hojeH), 'enviado|vencido');
+    igual('situação: aprovado e recusado nunca viram vencido', D.situacao(mkReg(1, 0, { status: 'aprovado', validadeAte: '2026-01-01' }), hojeH) + '|' + D.situacao(mkReg(1, 0, { status: 'recusado', validadeAte: '2026-01-01' }), hojeH), 'aprovado|recusado');
+    igual('situação: sem validade (texto, registro antigo) nunca vence', D.situacao(base30[0], hojeH) + '|' + D.situacao(mkReg(1, 90), hojeH), 'enviado|enviado');
+    igual('situação: vencido não é gravado no registro', D.atualizarRegistro(base30, D.chaveRegistro(base30[5]), { cliente: 'Escola' })[5].status, 'enviado');
+
+    // mudar situação, editar, reenviar, excluir
+    var chave14 = D.chaveRegistro(base30[0]);
+    var comStatus = D.atualizarRegistro(base30, chave14, { status: 'aprovado', statusEm: em(0, 17).toISOString() });
+    igual('mudar situação grava situação e data', comStatus[0].status + '|' + comStatus[0].statusEm.slice(0, 10), 'aprovado|2026-11-14');
+    igual('mudar situação não mexe nos outros nem na lista original', base30[0].status + '|' + comStatus[1].status + '|' + comStatus.length, 'enviado|aprovado|7');
+    igual('mudar situação: valor inválido é ignorado', D.atualizarRegistro(base30, chave14, { status: 'vencido' })[0].status, 'enviado');
+    igual('mudar situação sem data usa agora', /^\d{4}-\d{2}-\d{2}T/.test(D.atualizarRegistro(base30, chave14, { status: 'recusado' })[0].statusEm), true);
+    var editado = D.atualizarRegistro(base30, chave14, { cliente: '  Ana   S. ', descricao: 'Porta-chaves' });
+    igual('editar cliente e peça', editado[0].cliente + '|' + editado[0].descricao, 'Ana S.|Porta-chaves');
+    igual('editar não muda valores nem entrada', editado[0].total + '|' + editado[0].qtd, '62.41|10');
+    igual('chave inexistente não muda nada', JSON.stringify(D.atualizarRegistro(base30, '999|x', { cliente: 'Z' })), JSON.stringify(base30));
+    var reenv = D.atualizarRegistro(base30, chave14, { reenvios: base30[0].reenvios + 1 });
+    igual('reenviar: soma 1 em reenvios, sem novo registro e mesmo nº', reenv[0].reenvios + '|' + reenv.length + '|' + reenv[0].n, '1|7|14');
+    igual('reenviar: o orçamento refeito do registro tem o mesmo texto do original',
+      C.textoOrcamento(D.orcamentoDeRegistro(regNovo), { numero: regNovo.n }), C.textoOrcamento(r1, { numero: 14 }));
+    igual('reenviar: a imagem refeita do registro tem os mesmos valores',
+      JSON.stringify(C.dadosOrcamento(D.orcamentoDeRegistro(D.novoRegistro(r3, { numero: 2 })), { numero: 2, data: hojeH })), JSON.stringify(C.dadosOrcamento(r3, { numero: 2, data: hojeH })));
+    igual('reenviar: validade do envio original vale no lugar da de hoje', C.dadosOrcamento(r1, { numero: 1, data: hojeH, validadeAte: '2026-11-21' }).validade + '|' + C.dadosOrcamento(r1, { numero: 1, data: hojeH, validadeAte: '' }).validade + '|' + C.dadosOrcamento(r1, { numero: 1, data: hojeH }).validade, '21/11/2026||21/11/2026');
+    var semEle = D.excluirRegistro(base30, chave14);
+    igual('excluir tira só o registro escolhido', semEle.length + '|' + ids(semEle), '6|13,12,11,10,9,8');
+    igual('excluir chave inexistente não muda nada', D.excluirRegistro(base30, '999|x').length, 7);
+
+    // clientes recentes e texto de cada linha
+    igual('últimos 3 clientes diferentes (mais recente primeiro, sem repetir)', D.ultimosClientes(base30.concat([mkReg(15, 0, { cliente: 'ana souza' })]), 3).join(', '), 'ana souza, Oficina do Léo, Marina Lopes');
+    igual('últimos clientes: sem cliente não entra; lista curta', D.ultimosClientes([mkReg(1, 0), mkReg(2, 1, { cliente: 'Zé' })], 3).join(','), 'Zé');
+    igual('linha: peça digitada', D.descricaoLinha(base30[0]), 'Suporte de celular');
+    igual('linha: N peças · material (da entrada)', D.descricaoLinha(mkReg(1, 0, { qtd: 10, entrada: D.montarEntrada(entPlanilha) })), '10 peças · PLA');
+    igual('linha: 1 peça sem material', D.descricaoLinha(mkReg(1, 0)), '1 peça');
+    igual('linha: registro antigo usa o material gravado', D.descricaoLinha(lidos[0]), 'Vaso');
+    igual('material do registro multicor', D.materialDoRegistro({ entrada: eM }) + '|' + D.materialParaEnvio({ entrada: eM }, true) + '|' + D.materialParaEnvio({ entrada: eM }, false), 'PLA + PETG|PLA + PETG (multicor)|');
+    igual('material para o reenvio só com a opção ligada', D.materialParaEnvio({ entrada: D.montarEntrada(entPlanilha) }, true) + '|' + D.materialParaEnvio({ entrada: D.montarEntrada(entPlanilha) }, false), 'PLA|');
+    igual('material do registro antigo vem do que foi gravado', D.materialDoRegistro({ material: 'PETG' }) + '|' + D.materialParaEnvio({ material: 'PETG' }, true), 'PETG|PETG');
+    igual('descrição do envio', D.descreverEnvio(base30[0], hojeH) + ' / ' + D.descreverEnvio(base30[3], hojeH) + ' / ' + D.descreverEnvio(base30[5], hojeH),
+      'Enviado hoje às ' + D.hora(base30[0].ts) + ' como imagem / Enviado ontem às ' + D.hora(base30[3].ts) + ' como texto / Enviado em 05/11/2026 às ' + D.hora(base30[5].ts) + ' como texto');
+    igual('validade curta', D.validadeCurta('2026-11-21', hojeH) + '|' + D.validadeCurta('2027-01-05', hojeH) + '|' + D.validadeCurta('', hojeH), '21/11|05/01/2027|');
+    igual('rótulos de situação', ['enviado', 'aprovado', 'recusado', 'vencido'].map(function (k) { return D.ROTULOS_SITUACAO[k]; }).join(','), 'Enviado,Aprovado,Recusado,Vencido');
+
+    // lembrete de backup: pronto, mas só será exibido na etapa do backup
+    var muitos = []; for (var q = 1; q <= 20; q++) muitos.push(mkReg(q, 0));
+    igual('lembrete: sem backup, 20 orçamentos = mostrar', JSON.stringify(D.precisaLembreteBackup(muitos, null)), '{"mostrar":true,"qtd":20}');
+    igual('lembrete: sem backup, 19 orçamentos = não mostrar', D.precisaLembreteBackup(muitos.slice(1), null).mostrar, false);
+    igual('lembrete: conta só os depois do backup', JSON.stringify(D.precisaLembreteBackup(muitos, { em: em(0, 10, 30).toISOString() })), '{"mostrar":false,"qtd":' + muitos.filter(function (x) { return new Date(x.ts) > em(0, 10, 30); }).length + '}');
+    igual('lembrete: limite padrão 20', D.LIMITE_LEMBRETE_BACKUP, 20);
 
     return resultados;
   }
