@@ -211,6 +211,60 @@
     igual('registros: mantém os 3 mais recentes', lista.map(function (x) { return x.n; }).join(','), '3,4,5');
     igual('registros: lista inválida começa do zero', C.adicionarRegistro(null, { n: 1 }).length, 1);
 
+    // v3 · 4. arredondamento (sempre para cima, no valor por peça)
+    function arr(v, modo) { return C.arredondarCima(v, modo); }
+    igual('arredondar exato: 2,36 não muda', arr(2.36, 'exato'), 2.36);
+    igual('arredondar ,50: 2,36 → 2,50', arr(2.36, '50'), 2.5);
+    igual('arredondar ,50: 2,51 → 3,00', arr(2.51, '50'), 3);
+    igual('arredondar ,50: 2,50 já no formato não muda', arr(2.5, '50'), 2.5);
+    igual('arredondar ,90: 2,36 → 2,90', arr(2.36, '90'), 2.9);
+    igual('arredondar ,90: 2,91 → 3,90', arr(2.91, '90'), 3.9);
+    igual('arredondar ,90: 2,90 já no formato não muda', arr(2.9, '90'), 2.9);
+    igual('arredondar ,90: 0,05 → 0,90', arr(0.05, '90'), 0.9);
+    igual('arredondar inteiro: 2,36 → 3,00', arr(2.36, 'inteiro'), 3);
+    igual('arredondar inteiro: 3,00 já no formato não muda', arr(3, 'inteiro'), 3);
+    igual('arredondar inteiro: 3,01 → 4,00', arr(3.01, 'inteiro'), 4);
+    igual('arredondar: valor com fração de centavo usa o que a tela mostra (2,5049 → 2,50)', arr(2.5049, '50'), 2.5);
+    igual('arredondar: imprecisão de ponto flutuante não sobe (0,1+0,2 → ,50 = 0,50)', arr(0.1 + 0.2 + 0.2, '50'), 0.5);
+    igual('arredondar: zero nunca vira ,90', arr(0, '90'), 0);
+    [['exato', 'exato'], ['50', '50'], ['90', '90'], ['inteiro', 'inteiro'], ['INTEIRO', 'inteiro'], ['', 'exato'], ['xyz', 'exato'], [null, 'exato'], [90, '90']].forEach(function (t) {
+      igual('lerArredondamento ' + JSON.stringify(t[0]), C.lerArredondamento(t[0]), t[1]);
+    });
+    igual('padrão do arredondamento é exato', C.PADROES.arredondamento, 'exato');
+    igual('sem o campo "arredondar": planilha R$ 2,36', m(C.calcular(base).valorCobrar), 'R$ 2,36');
+    igual('exato: planilha R$ 2,36 e arredondamento 0', m(com({ arredondar: 'exato' }).valorCobrar) + ' ' + com({ arredondar: 'exato' }).arredondamento, 'R$ 2,36 0');
+    var ra50 = com({ arredondar: '50' });
+    igual('cálculo ,50: R$ 2,50', m(ra50.valorCobrar), 'R$ 2,50');
+    igual('cálculo ,50: arredondamento +R$ 0,14', m(ra50.arredondamento), 'R$ 0,14');
+    igual('cálculo ,50: valor por peça antes de arredondar R$ 2,36', m(ra50.valorAntesArredondar), 'R$ 2,36');
+    igual('cálculo ,50: lucro recalculado com o valor arredondado (2,50 − 1,18)', m(ra50.lucro), 'R$ 1,32');
+    igual('cálculo ,90: R$ 2,90', m(com({ arredondar: '90' }).valorCobrar), 'R$ 2,90');
+    igual('cálculo inteiro: R$ 3,00', m(com({ arredondar: 'inteiro' }).valorCobrar), 'R$ 3,00');
+    var exato25 = com({ peso: 100, tempo: 0, precoKg: 25, perdaPct: 0, margemPct: 0, arredondar: '50' });
+    igual('valor já no formato (R$ 2,50) não muda e não acrescenta nada', m(exato25.valorCobrar) + ' ' + exato25.arredondamento, 'R$ 2,50 0');
+    // mínimo → arredondamento
+    var rMinArr = com({ minimo: 10, arredondar: 'inteiro' });
+    igual('mínimo aplicado: não arredonda', m(rMinArr.valorCobrar) + ' ' + rMinArr.minimoAplicado + ' ' + rMinArr.arredondamento, 'R$ 10,00 true 0');
+    var rMin240 = com({ minimo: 2.4, arredondar: 'inteiro' });
+    igual('mínimo R$ 2,40 aplicado: fica 2,40 (e não 3,00)', m(rMin240.valorCobrar), 'R$ 2,40');
+    igual('mínimo não aplicado (R$ 1,00): arredonda normalmente', m(com({ minimo: 1, arredondar: 'inteiro' }).valorCobrar), 'R$ 3,00');
+    // quantidade: o valor por peça é arredondado e o total = peças × valor arredondado
+    var r3a = com({ peso: 15, tempo: 30, qtd: 3, arredondar: '50' });
+    igual('3 peças ,50: valor por peça R$ 2,50', m(r3a.valorUnitario), 'R$ 2,50');
+    igual('3 peças ,50: total = 3 × 2,50 = R$ 7,50', m(r3a.valorCobrar), 'R$ 7,50');
+    igual('3 peças ,50: arredondamento no total +R$ 0,41', m(r3a.arredondamento), 'R$ 0,41');
+    igual('3 peças ,90: total R$ 8,70', m(com({ peso: 15, tempo: 30, qtd: 3, arredondar: '90' }).valorCobrar), 'R$ 8,70');
+    igual('3 peças inteiro: total R$ 9,00', m(com({ peso: 15, tempo: 30, qtd: 3, arredondar: 'inteiro' }).valorCobrar), 'R$ 9,00');
+    igual('3 peças exato continua R$ 7,09', m(com({ peso: 15, tempo: 30, qtd: 3 }).valorCobrar), 'R$ 7,09');
+    igual('tudo zero com ,90: continua R$ 0,00', m(com({ peso: 0, tempo: 0, arredondar: '90' }).valorCobrar), 'R$ 0,00');
+    igual('modo inválido = exato', m(com({ arredondar: 'abc' }).valorCobrar), 'R$ 2,36');
+    // orçamento enviado mostra o valor arredondado, sem revelar o arredondamento
+    var txtArr = C.textoOrcamento(r3a, { numero: 1 }).replace(NB, ' ');
+    igual('texto mostra o valor arredondado', txtArr, '*Orçamento Nº 0001 — Mundo 3DI*\n3 peças impressas em 3D\nValor por peça: R$ 2,50\n*Total: R$ 7,50*');
+    igual('texto não cita arredondamento', /arredond/.test(txtArr.toLowerCase()), false);
+    igual('imagem: total e valor por peça arredondados', (function () { var d = C.dadosOrcamento(r3a, { numero: 1 }); return d.valorPeca.replace(NB, ' ') + ' / ' + d.total.replace(NB, ' '); })(), 'R$ 2,50 / R$ 7,50');
+    igual('dados da imagem não citam arredondamento', /arredond/.test(JSON.stringify(C.dadosOrcamento(r3a, { numero: 1 })).toLowerCase()), false);
+
     return resultados;
   }
 

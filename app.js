@@ -28,6 +28,7 @@
     cfg.modoHora = salvo && salvo.modoHora === 'detalhado' ? 'detalhado' : 'simples';
     cfg.impressora = C.lerImpressora(salvo && salvo.impressora);
     cfg.negocio = C.lerNegocio(salvo && salvo.negocio);
+    cfg.arredondamento = C.lerArredondamento(salvo && salvo.arredondamento);
     cfg.precoKg = C.precoKgMaterial(materialPorId(cfg, cfg.materialPadrao));
     return cfg;
   }
@@ -93,7 +94,8 @@
     var imp = config.modoHora === 'detalhado' ? C.calcularImpressora(config.impressora) : null;
     var r = C.calcular({ peso: peso, tempo: tempo, margemPct: margem, qtd: qtd, extrasPeca: extrasPeca,
       precoKg: precoKg, valorHora: config.valorHora, perdaPct: config.perdaPct, minimo: config.minimo,
-      energiaHora: imp ? imp.energiaHora : undefined, desgasteHora: imp ? imp.desgasteHora : undefined });
+      energiaHora: imp ? imp.energiaHora : undefined, desgasteHora: imp ? imp.desgasteHora : undefined,
+      arredondar: config.arredondamento });
 
     if ($('material-nome').textContent !== fil.nome) { $('material-nome').textContent = fil.nome; ajustarRotuloPeso(); }
     $('d-material').textContent = num(peso) + ' g de ' + fil.nome + ' × ' + moeda(precoKg) + '/kg';
@@ -117,6 +119,10 @@
     $('d-extras').textContent = qtd + ' × ' + moeda(extrasPeca);
     $('v-extras').textContent = '+ ' + moeda(r.extras);
     $('v-total').textContent = moeda(r.custoTotal);
+    /* Arredondamento: só aparece quando acrescentou alguma coisa ao valor */
+    $('r-arred').hidden = !(r.arredondamento > 0.004);
+    $('d-arred').textContent = 'Valor por peça de ' + moeda(r.valorAntesArredondar) + ' para ' + moeda(r.valorUnitario);
+    $('v-arred').textContent = '+ ' + moeda(r.arredondamento);
     $('v-lucro').textContent = moeda(r.lucro);
     $('v-final').textContent = moeda(r.valorCobrar);
     $('d-unit').hidden = qtd <= 1;
@@ -412,8 +418,24 @@
     cHora.value = dinheiro(cfg.valorHora);
     cPerda.value = num(cfg.perdaPct);
     cMin.value = dinheiro(cfg.minimo || 0);
+    definirArredondamento(cfg.arredondamento);
     ajudasConfig();
   }
+  /* Arredondamento do valor por peça: Exato · ,50 · ,90 · Inteiro (sempre para cima) */
+  var arredEdicao = 'exato';
+  var botoesArred = Array.prototype.slice.call(document.querySelectorAll('[data-arr]'));
+  function definirArredondamento(modo) {
+    arredEdicao = C.lerArredondamento(modo);
+    botoesArred.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.arr === arredEdicao)); });
+    var exemplo = {
+      exato: 'Sem arredondar: o valor sai exatamente como calculado.',
+      '50': 'Sobe para o próximo ,50. Ex.: R$ 2,36 vira ' + moeda(C.arredondarCima(2.36, '50')) + '.',
+      '90': 'Sobe para o próximo ,90. Ex.: R$ 2,36 vira ' + moeda(C.arredondarCima(2.36, '90')) + '.',
+      inteiro: 'Sobe para o próximo real. Ex.: R$ 2,36 vira ' + moeda(C.arredondarCima(2.36, 'inteiro')) + '.'
+    };
+    $('a-arred').textContent = exemplo[arredEdicao] + (arredEdicao === 'exato' ? '' : ' Com o preço mínimo aplicado, não arredonda.');
+  }
+  botoesArred.forEach(function (b) { b.addEventListener('click', function () { definirArredondamento(b.dataset.arr); }); });
   /* Campos da impressora: vazios quando 0 (aparece o "0" cinza do placeholder) */
   function preencherImpressora(p) {
     function din(n) { return n > 0 ? dinheiro(n) : ''; }
@@ -480,7 +502,7 @@
     config = {
       valorHora: C.lerNumero(cHora.value), perdaPct: C.lerNumero(cPerda.value), minimo: C.lerNumero(cMin.value),
       materiais: mats.materiais, materialPadrao: mats.materialPadrao, mostrarMaterial: cMostrar.checked,
-      modoHora: modoEdicao, impressora: lerImpressoraTela(), negocio: lerNegocioTela()
+      modoHora: modoEdicao, impressora: lerImpressoraTela(), negocio: lerNegocioTela(), arredondamento: arredEdicao
     };
     config.precoKg = C.precoKgMaterial(materialPorId(config, config.materialPadrao)); // compatibilidade com a v2
     var ok = salvarConfig(config);
@@ -495,7 +517,7 @@
     sairConfig();
     avisar(ok ? 'Configurações salvas' : 'Salvo só até fechar o app');
   });
-  /* Restaura hora (modo Simples), perda e preço mínimo; a lista de filamentos, o modo escolhido e os dados da impressora são mantidos */
+  /* Restaura hora (modo Simples), perda, preço mínimo e arredondamento (Exato); a lista de filamentos, o modo escolhido, os dados da impressora e os dados do negócio são mantidos */
   $('restaurar').addEventListener('click', function () {
     preencherCustos(C.PADROES);
     avisar('Padrões restaurados — toque em Salvar');

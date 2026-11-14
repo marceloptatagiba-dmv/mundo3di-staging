@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
 
-  var PADROES = { precoKg: 150, valorHora: 2.25, perdaPct: 5, margemPct: 100, minimo: 0 };
+  var PADROES = { precoKg: 150, valorHora: 2.25, perdaPct: 5, margemPct: 100, minimo: 0, arredondamento: 'exato' };
   var PESO_ROLO_PADRAO = 1000;   // gramas
   var MAX_MATERIAIS = 12;
 
@@ -40,6 +40,34 @@
     return h + 'h' + (m < 10 ? '0' : '') + m;
   }
 
+  /* ---------- Arredondamento do valor por peça ---------- */
+
+  var MODOS_ARREDONDAMENTO = ['exato', '50', '90', 'inteiro'];
+
+  /* Modo salvo ou digitado -> um dos quatro modos válidos; qualquer outra coisa vira "exato". */
+  function lerArredondamento(v) {
+    var s = String(v == null ? '' : v).trim().toLowerCase();
+    return MODOS_ARREDONDAMENTO.indexOf(s) !== -1 ? s : 'exato';
+  }
+
+  /*
+   * Arredonda um valor em reais SEMPRE PARA CIMA, conta em centavos inteiros:
+   *   50     -> próximo múltiplo de R$ 0,50   (2,36 -> 2,50)
+   *   90     -> próximo valor terminado em ,90 (2,36 -> 2,90 · 2,91 -> 3,90)
+   *   inteiro-> próximo real                    (2,36 -> 3,00 · 3,00 -> 3,00)
+   *   exato  -> sem mudança. Valor zero (ou negativo) nunca é arredondado.
+   * O valor é primeiro levado a centavos (o que a tela mostra); quem já está no formato não muda.
+   */
+  function arredondarCima(valor, modo) {
+    var m = lerArredondamento(modo);
+    if (!(valor > 0) || m === 'exato') return valor;
+    var c = Math.round(valor * 100), r;
+    if (m === '50') r = Math.ceil(c / 50) * 50;
+    else if (m === 'inteiro') r = Math.ceil(c / 100) * 100;
+    else { r = Math.floor(c / 100) * 100 + 90; if (r < c) r += 100; }
+    return r / 100;
+  }
+
   /* Quantidade de peças: inteiro >= 1 (vazio ou inválido = 1). */
   function lerQuantidade(valor) {
     var n = parseInt(String(valor == null ? '' : valor).replace(/\D/g, ''), 10);
@@ -52,7 +80,8 @@
    * Perda/Refugo = custo base × perda%
    * Extras       = extras por peça × qtd (sem perda)
    * Custo total  = custo base + perda + extras
-   * Valor final  = custo total × (1 + margem%), nunca abaixo do preço mínimo do pedido
+   * Valor final  = custo total × (1 + margem%), nunca abaixo do preço mínimo do pedido;
+   *                depois, se houver arredondamento (e o mínimo não foi aplicado), o valor por peça sobe para ,50 / ,90 / inteiro
    * Lucro        = valor final − custo total
    * Unitário     = valor final ÷ qtd
    */
@@ -75,7 +104,14 @@
     var custoTotal = custoBase + perda + extras;
     var valorCalculado = custoTotal * (1 + e.margemPct / 100);
     var minimoAplicado = minimo > 0 && custoTotal > 0 && valorCalculado < minimo;
-    var valorCobrar = minimoAplicado ? minimo : valorCalculado;
+    /* Ordem: cálculo → preço mínimo → arredondamento (só no valor por peça; com o mínimo aplicado não arredonda) */
+    var modoArred = lerArredondamento(e.arredondar);
+    var valorBase = minimoAplicado ? minimo : valorCalculado;
+    var arredondado = !minimoAplicado && modoArred !== 'exato' && valorCalculado > 0;
+    var valorCobrar = valorBase;
+    if (arredondado) {
+      valorCobrar = Math.round(arredondarCima(valorCalculado / qtd, modoArred) * qtd * 100) / 100;
+    }
     return {
       qtd: qtd,
       valorGrama: valorGrama,
@@ -91,6 +127,8 @@
       custoTotal: custoTotal,
       valorCalculado: valorCalculado,
       minimoAplicado: minimoAplicado,
+      arredondamento: valorCobrar - valorBase,                 // R$ acrescentados ao total pelo arredondamento
+      valorAntesArredondar: valorBase / qtd,                   // valor por peça antes de arredondar
       valorCobrar: valorCobrar,
       lucro: valorCobrar - custoTotal,
       valorUnitario: valorCobrar / qtd
@@ -304,6 +342,7 @@
     precoKgMaterial: precoKgMaterial, lerMateriais: lerMateriais, lerPesoRolo: lerPesoRolo,
     lerDinheiro: lerDinheiro, lerInteiro: lerInteiro, lerImpressora: lerImpressora, calcularImpressora: calcularImpressora,
     MAX_HORAS_ANO: MAX_HORAS_ANO,
+    MODOS_ARREDONDAMENTO: MODOS_ARREDONDAMENTO, lerArredondamento: lerArredondamento, arredondarCima: arredondarCima,
     NOME_PADRAO: NOME_PADRAO, LIMITES_NEGOCIO: LIMITES_NEGOCIO, VALIDADE_PADRAO: VALIDADE_PADRAO, MAX_REGISTROS: MAX_REGISTROS,
     lerNegocio: lerNegocio, formatarNumero: formatarNumero, formatarData: formatarData,
     dadosOrcamento: dadosOrcamento, novoRegistro: novoRegistro, adicionarRegistro: adicionarRegistro
