@@ -15,6 +15,7 @@ App web instalável (PWA) para montar e enviar orçamentos de peças impressas e
 | Valor a cobrar | Custo total × (1 + margem %) — padrão 100%. Nunca fica abaixo do **preço mínimo por pedido** (0 = desligado) |
 | Lucro | Valor a cobrar − Custo total |
 | Valor por peça | Valor a cobrar ÷ peças na mesa |
+| Peças multicor (AMS) | No filamento da tela principal, escolha **Multicor (AMS)**: abre a folha de cores (filamento + gramas de cada cor, até 8) e o campo **Purga + torre (g)**, copiado do fatiador. A purga é cobrada pelo preço médio ponderado das cores (ex.: 30 g de R$ 150/kg + 10 g de R$ 120/kg → R$ 0,1425/g; 8 g de purga = R$ 1,14; material total R$ 6,84). Fica só na memória (não grava). O orçamento ao cliente mostra só os nomes (ex.: "PLA + PETG (multicor)"), sem custo |
 | Arredondamento (opcional) | Em Configurações: **Exato** (padrão), **,50**, **,90** ou **Inteiro**. Sempre para cima, no valor por peça (total = peças × valor arredondado). Ordem: cálculo → preço mínimo → arredondamento; com o preço mínimo aplicado não arredonda. Ex.: R$ 2,36 vira R$ 2,50 (,50), R$ 2,90 (,90) ou R$ 3,00 (inteiro); R$ 2,91 em ,90 vira R$ 3,90. O lucro usa o valor arredondado e o "Ver cálculo" mostra a linha "Arredondamento" |
 
 Peso e tempo são os da **mesa inteira** (como o fatiador informa); "Peças na mesa" divide o valor para dar o preço de cada peça. O botão **Enviar orçamento** abre o compartilhamento do celular (WhatsApp etc.) com um texto pronto, sem mostrar custo nem margem.

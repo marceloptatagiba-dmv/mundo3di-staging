@@ -101,7 +101,7 @@
     }
     bloco('CLIENTE', d.cliente, 2);
     bloco('PEÇA', d.descricao, 3);
-    bloco('MATERIAL', d.material, 1);
+    bloco('MATERIAL', d.material, 2);
 
     /* Quantidade e valor por peça */
     if (d.qtd > 1) {

@@ -59,6 +59,23 @@
   var ePeso = $('peso'), eTempo = $('tempo'), eMargem = $('margem'), eQtd = $('qtd'), eExtras = $('extras');
   var eMaterial = $('material');
 
+  /* Peça multicor: só em memória (não grava no aparelho). cores = [{ id do filamento, g texto }] */
+  var MULTI = '__multicor';
+  var multicorAtivo = false;
+  var cores = [{ id: null, g: '' }, { id: null, g: '' }];
+  var purgaTxt = '';
+  function coresCalculo() {
+    return cores.map(function (c) {
+      var f = materialPorId(config, c.id) || filamentoAtual();
+      return { gramas: C.lerNumero(c.g), precoKg: C.precoKgMaterial(f), nome: f.nome };
+    });
+  }
+  function nomesCores() {
+    var vistos = [];
+    coresCalculo().forEach(function (c) { if (c.gramas > 0 && vistos.indexOf(c.nome) < 0) vistos.push(c.nome); });
+    return vistos.join(' + ');
+  }
+
   function montarSeletor() {
     eMaterial.textContent = '';
     config.materiais.forEach(function (m) {
@@ -66,7 +83,10 @@
       o.value = m.id; o.textContent = m.nome;
       eMaterial.appendChild(o);
     });
-    eMaterial.value = filamentoAtual().id;
+    var o = document.createElement('option');
+    o.value = MULTI; o.textContent = 'Multicor (AMS)';
+    eMaterial.appendChild(o);
+    eMaterial.value = multicorAtivo ? MULTI : filamentoAtual().id;
   }
   /* Nome de filamento longo: o rótulo "Peso da mesa" encurta para "Peso" para o nome caber */
   function ajustarRotuloPeso() {
@@ -75,7 +95,17 @@
     if (nome.scrollWidth > nome.clientWidth) rot.textContent = 'Peso';
   }
   window.addEventListener('resize', ajustarRotuloPeso);
+  function aplicarModoMulticor() {
+    ePeso.readOnly = multicorAtivo;
+    ePeso.setAttribute('inputmode', multicorAtivo ? 'none' : 'decimal');
+    ePeso.parentNode.classList.toggle('multi', multicorAtivo);
+    $('material-nome').textContent = multicorAtivo ? 'Multicor' : filamentoAtual().nome;
+    ajustarRotuloPeso();
+  }
   eMaterial.addEventListener('change', function () {
+    if (eMaterial.value === MULTI) { multicorAtivo = true; aplicarModoMulticor(); atualizar(); abrirCores(); return; }
+    if (multicorAtivo) ePeso.value = '';
+    multicorAtivo = false; aplicarModoMulticor();
     materialAtual = eMaterial.value;
     try { localStorage.setItem(CHAVE_MAT, materialAtual); } catch (e) {}
     atualizar();
@@ -92,14 +122,25 @@
     var fil = filamentoAtual();
     var precoKg = C.precoKgMaterial(fil);
     var imp = config.modoHora === 'detalhado' ? C.calcularImpressora(config.impressora) : null;
-    var r = C.calcular({ peso: peso, tempo: tempo, margemPct: margem, qtd: qtd, extrasPeca: extrasPeca,
+    var cc = multicorAtivo ? coresCalculo() : null;
+    var r = C.calcular({ peso: peso, tempo: tempo, cores: cc, purgaG: multicorAtivo ? C.lerNumero(purgaTxt) : 0, margemPct: margem, qtd: qtd, extrasPeca: extrasPeca,
       precoKg: precoKg, valorHora: config.valorHora, perdaPct: config.perdaPct, minimo: config.minimo,
       energiaHora: imp ? imp.energiaHora : undefined, desgasteHora: imp ? imp.desgasteHora : undefined,
       arredondar: config.arredondamento });
 
-    if ($('material-nome').textContent !== fil.nome) { $('material-nome').textContent = fil.nome; ajustarRotuloPeso(); }
-    $('d-material').textContent = num(peso) + ' g de ' + fil.nome + ' × ' + moeda(precoKg) + '/kg';
+    var nomeChip = multicorAtivo ? 'Multicor' : fil.nome;
+    if ($('material-nome').textContent !== nomeChip) { $('material-nome').textContent = nomeChip; ajustarRotuloPeso(); }
+    if (multicorAtivo) {
+      ePeso.value = r.pesoTotal > 0 ? num(r.pesoTotal) : '';
+      var nc = cc.filter(function (c) { return c.gramas > 0; }).length;
+      $('d-material').textContent = num(r.pesoTotal) + ' g em ' + nc + (nc === 1 ? ' cor' : ' cores');
+    } else {
+      $('d-material').textContent = num(peso) + ' g de ' + fil.nome + ' × ' + moeda(precoKg) + '/kg';
+    }
     $('v-material').textContent = moeda(r.material);
+    $('r-purga').hidden = !multicorAtivo || r.purgaGramas <= 0;
+    $('d-purga').textContent = num(r.purgaGramas) + ' g × ' + moeda(r.precoMedioGrama * 1000) + '/kg (média)';
+    $('v-purga').textContent = moeda(r.purga);
     /* Modo simples: uma linha "Impressão". Modo detalhado: "Energia" e "Desgaste da impressora". */
     $('r-impressao').hidden = r.detalhado;
     $('r-energia').hidden = !r.detalhado;
@@ -151,8 +192,57 @@
 
   $('margem-outra').addEventListener('click', function () { outraAberta = true; atualizar(); eMargem.focus(); });
 
+  /* ---------- Folha de cores (multicor) ---------- */
+  var folhaCores = $('folha-cores'), listaCores = $('cores-lista'), ePurga = $('purga');
+  function opcoesFilamento(sel, id) {
+    config.materiais.forEach(function (m) {
+      var o = document.createElement('option'); o.value = m.id; o.textContent = m.nome; sel.appendChild(o);
+    });
+    sel.value = id;
+  }
+  function desenharCores() {
+    listaCores.textContent = '';
+    cores.forEach(function (c, i) {
+      if (!materialPorId(config, c.id)) c.id = filamentoAtual().id;
+      var linha = document.createElement('div'); linha.className = 'cor-linha';
+      var sel = document.createElement('select'); sel.setAttribute('aria-label', 'Filamento da cor ' + (i + 1));
+      opcoesFilamento(sel, c.id);
+      sel.addEventListener('change', function () { c.id = sel.value; atualizar(); });
+      var cx = document.createElement('label'); cx.className = 'caixa';
+      var inp = document.createElement('input'); inp.type = 'text'; inp.inputMode = 'decimal'; inp.autocomplete = 'off';
+      inp.placeholder = '0'; inp.value = c.g; inp.setAttribute('aria-label', 'Gramas da cor ' + (i + 1));
+      inp.addEventListener('input', function () { c.g = inp.value; atualizar(); });
+      inp.addEventListener('focus', function () { setTimeout(function () { inp.select(); }, 0); });
+      var u = document.createElement('small'); u.textContent = 'g';
+      cx.appendChild(inp); cx.appendChild(u);
+      var tira = document.createElement('button'); tira.type = 'button'; tira.className = 'tira'; tira.textContent = '×';
+      tira.setAttribute('aria-label', 'Remover cor ' + (i + 1)); tira.hidden = cores.length <= 1;
+      tira.addEventListener('click', function () { cores.splice(i, 1); desenharCores(); atualizar(); });
+      linha.appendChild(sel); linha.appendChild(cx); linha.appendChild(tira);
+      listaCores.appendChild(linha);
+    });
+    $('cores-mais').hidden = cores.length >= C.MAX_CORES;
+  }
+  function abrirCores() {
+    desenharCores(); ePurga.value = purgaTxt; folhaCores.hidden = false;
+    var primeiro = listaCores.querySelector('input'); if (primeiro) setTimeout(function () { primeiro.focus(); }, 50);
+  }
+  function fecharCores() { folhaCores.hidden = true; }
+  $('cores-mais').addEventListener('click', function () {
+    cores.push({ id: filamentoAtual().id, g: '' }); desenharCores(); atualizar();
+    var ins = listaCores.querySelectorAll('input'); ins[ins.length - 1].focus();
+  });
+  ePurga.addEventListener('input', function () { purgaTxt = ePurga.value; atualizar(); });
+  ePurga.addEventListener('focus', function () { setTimeout(function () { ePurga.select(); }, 0); });
+  $('cores-pronto').addEventListener('click', fecharCores);
+  $('cores-fechar').addEventListener('click', fecharCores);
+  $('cores-fundo').addEventListener('click', fecharCores);
+  ePeso.addEventListener('click', function () { if (multicorAtivo) abrirCores(); });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !folhaCores.hidden) fecharCores(); });
+
   $('limpar').addEventListener('click', function () {
     outraAberta = false;
+    purgaTxt = ''; cores.forEach(function (c) { c.g = ''; });
     ePeso.value = ''; eTempo.value = ''; eQtd.value = '1'; eExtras.value = ''; eMargem.value = String(C.PADROES.margemPct);
     atualizar(); ePeso.focus();
   });
@@ -204,7 +294,7 @@
   var imagem = null;            // { arquivo, url, numero } — imagem já pronta para enviar
   var tokenImagem = 0, timerImagem;
 
-  function nomeFilamentoEnvio() { return config.mostrarMaterial ? filamentoAtual().nome : ''; }
+  function nomeFilamentoEnvio() { return config.mostrarMaterial ? (multicorAtivo ? (nomesCores() ? nomesCores() + ' (multicor)' : '') : filamentoAtual().nome) : ''; }
   function whatsappTexto(texto) { window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener'); }
 
   function abrirFolha() {

@@ -145,6 +145,11 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 .logo-linha{display:flex;gap:12px;align-items:center}
 .logo-linha img{height:64px;width:96px;object-fit:contain;border:1.5px solid var(--linha);border-radius:10px;padding:4px;background:#fff;flex-shrink:0}
 .logo-botoes{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+.cor-linha{display:grid;grid-template-columns:minmax(0,1fr) 110px 40px;gap:8px;align-items:center}
+.cor-linha select{height:48px;min-width:0;border:1.5px solid var(--borda);border-radius:12px;background:var(--campo);padding:0 10px;font-size:16px;font-weight:600}
+.cor-linha .tira{height:48px;border:0;background:transparent;color:var(--suave);font-size:22px}
+.cor-linha .tira[hidden]{visibility:hidden;display:block}
+.caixa.multi input{cursor:pointer}
 .folha{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center}
 .folha[hidden]{display:none}
 .folha-fundo{position:absolute;inset:0;background:rgba(14,15,16,.5)}
@@ -235,6 +240,7 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
         </summary>
         <div class="corpo" aria-label="Detalhamento do cálculo">
           <div class="linha"><div class="rot"><strong>Material</strong><span id="d-material"></span></div><span class="val" id="v-material"></span></div>
+          <div class="linha" id="r-purga" hidden><div class="rot"><strong>Purga e torre</strong><span id="d-purga"></span></div><span class="val" id="v-purga"></span></div>
           <div class="linha" id="r-impressao"><div class="rot"><strong>Impressão</strong><span id="d-impressao"></span></div><span class="val" id="v-impressao"></span></div>
           <div class="linha" id="r-energia" hidden><div class="rot"><strong>Energia</strong><span id="d-energia"></span></div><span class="val" id="v-energia"></span></div>
           <div class="linha" id="r-desgaste" hidden><div class="rot"><strong>Desgaste da impressora</strong><span id="d-desgaste"></span></div><span class="val" id="v-desgaste"></span></div>
@@ -412,6 +418,24 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 
 </div>
 <!-- PAINEL: ENVIAR ORÇAMENTO (texto ou imagem) -->
+<div class="folha" id="folha-cores" hidden>
+  <div class="folha-fundo" id="cores-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="cores-titulo">
+    <div class="folha-topo">
+      <strong id="cores-titulo">Peça multicor</strong>
+      <button class="fechar" type="button" id="cores-fechar" aria-label="Fechar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="bloco" id="cores-lista"></div>
+    <button class="btn mais" type="button" id="cores-mais">+ Adicionar cor</button>
+    <label class="campo"><span>Purga + torre (g) — copie do fatiador</span>
+      <span class="caixa"><input id="purga" type="text" inputmode="decimal" autocomplete="off" placeholder="0"><small>g</small></span>
+    </label>
+    <button class="btn principal" type="button" id="cores-pronto">Pronto</button>
+  </div>
+</div>
+
 <div class="folha" id="folha" hidden>
   <div class="folha-fundo" id="folha-fundo"></div>
   <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="folha-titulo">

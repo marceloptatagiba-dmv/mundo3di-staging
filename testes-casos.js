@@ -265,6 +265,31 @@
     igual('imagem: total e valor por peça arredondados', (function () { var d = C.dadosOrcamento(r3a, { numero: 1 }); return d.valorPeca.replace(NB, ' ') + ' / ' + d.total.replace(NB, ' '); })(), 'R$ 2,50 / R$ 7,50');
     igual('dados da imagem não citam arredondamento', /arredond/.test(JSON.stringify(C.dadosOrcamento(r3a, { numero: 1 })).toLowerCase()), false);
 
+    // ---------- peças multicor (item 5) ----------
+    var rUma = com({ cores: [{ gramas: 5, precoKg: 150 }], purgaG: 0 });
+    igual('multicor: 1 cor sem purga = caso da planilha R$ 2,36', m(rUma.valorCobrar), 'R$ 2,36');
+    igual('multicor: sem "cores" continua igual (sem purga)', m(com({}).valorCobrar) + ' ' + com({}).multicor + ' ' + m(com({}).purga), 'R$ 2,36 false R$ 0,00');
+    var rMc = C.calcular({ peso: 40, tempo: 0, precoKg: 150, valorHora: 0, perdaPct: 0, margemPct: 0,
+      cores: [{ gramas: 30, precoKg: 150 }, { gramas: 10, precoKg: 120 }], purgaG: 8 });
+    igual('multicor: material das cores R$ 5,70', m(rMc.material), 'R$ 5,70');
+    igual('multicor: purga R$ 1,14 (preço médio 0,1425/g)', m(rMc.purga) + ' ' + rMc.precoMedioGrama.toFixed(4), 'R$ 1,14 0.1425');
+    igual('multicor: material + purga R$ 6,84', m(rMc.materialTotal), 'R$ 6,84');
+    igual('multicor: custo e valor = R$ 6,84', m(rMc.custoTotal) + ' ' + m(rMc.valorCobrar), 'R$ 6,84 R$ 6,84');
+    igual('multicor: peso das peças 40 g, purga 8 g', rMc.pesoTotal + ' ' + rMc.purgaGramas, '40 8');
+    var rMesma = C.calcular({ tempo: 0, valorHora: 0, perdaPct: 0, margemPct: 0, precoKg: 150,
+      cores: [{ gramas: 20, precoKg: 150 }, { gramas: 10, precoKg: 150 }], purgaG: 10 });
+    igual('multicor: mesmo material, purga no preço dele (R$ 1,50)', m(rMesma.purga), 'R$ 1,50');
+    var rSemG = C.calcular({ tempo: 0, valorHora: 0, perdaPct: 0, margemPct: 0, precoKg: 150,
+      cores: [{ gramas: 0, precoKg: 200 }], purgaG: 10 });
+    igual('multicor: sem gramas, purga usa preço da 1ª cor (R$ 2,00)', m(rSemG.purga) + ' ' + m(rSemG.material), 'R$ 2,00 R$ 0,00');
+    var rNeg = C.resumirCores([{ gramas: -5, precoKg: 150 }, { gramas: 10, precoKg: 100 }], -3);
+    igual('multicor: gramas e purga negativas são ignoradas', rNeg.pesoCores + ' ' + rNeg.purgaG + ' ' + rNeg.material.toFixed(2), '10 0 1.00');
+    igual('multicor: lista vazia = tudo zero', C.resumirCores([], 5).purga + ' ' + C.resumirCores([], 5).material, '0 0');
+    igual('multicor: limite de cores', C.resumirCores(new Array(12).fill({ gramas: 1, precoKg: 100 })).quantidadeCores, C.MAX_CORES);
+    var rMcArr = C.calcular({ tempo: 0, valorHora: 0, perdaPct: 0, margemPct: 100, precoKg: 150, arredondar: 'inteiro',
+      cores: [{ gramas: 30, precoKg: 150 }, { gramas: 10, precoKg: 120 }], purgaG: 8 });
+    igual('multicor: margem 100% e arredondamento inteiro → R$ 14,00', m(rMcArr.valorCobrar), 'R$ 14,00');
+
     return resultados;
   }
 

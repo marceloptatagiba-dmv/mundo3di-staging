@@ -74,9 +74,38 @@
     return isFinite(n) && n >= 1 ? Math.min(n, 9999) : 1;
   }
 
+  /* ---------- Peças multicor (AMS) ---------- */
+
+  var MAX_CORES = 8;
+
+  /*
+   * cores: [{ gramas, precoKg }] · purgaG: purga + torre (g), copiada do fatiador.
+   * Material = soma de gramas × preço por grama de cada cor.
+   * A purga é cobrada pelo PREÇO MÉDIO PONDERADO das cores usadas (média dos preços por grama, ponderada pelas gramas):
+   *   PLA 30 g × 0,15 + PETG 10 g × 0,12 = 5,70 ÷ 40 g = 0,1425/g → purga de 8 g = R$ 1,14.
+   * Sem gramas nas cores, a purga usa o preço da primeira cor (para não sair de graça).
+   */
+  function resumirCores(cores, purgaG) {
+    var lista = Array.isArray(cores) ? cores.slice(0, MAX_CORES) : [];
+    var pesoCores = 0, material = 0, usadas = 0;
+    lista.forEach(function (c) {
+      var g = c && c.gramas > 0 && isFinite(c.gramas) ? c.gramas : 0;
+      var kg = c && c.precoKg > 0 && isFinite(c.precoKg) ? c.precoKg : 0;
+      pesoCores += g; material += g * kg / 1000;
+      if (g > 0) usadas++;
+    });
+    var gPurga = purgaG > 0 && isFinite(purgaG) ? purgaG : 0;
+    var precoMedioGrama = pesoCores > 0 ? material / pesoCores
+      : (lista.length && lista[0] && lista[0].precoKg > 0 ? lista[0].precoKg / 1000 : 0);
+    return {
+      quantidadeCores: usadas, pesoCores: pesoCores, material: material,
+      purgaG: gPurga, precoMedioGrama: precoMedioGrama, purga: gPurga * precoMedioGrama
+    };
+  }
+
   /*
    * Peso e tempo são da mesa inteira (como o fatiador informa); qtd = peças na mesa.
-   * Custo base   = peso × (preço kg / 1000) + tempo × (valor hora / 60)
+   * Custo base   = material (peso × preço kg / 1000; multicor: soma das cores) + purga (multicor) + tempo × (valor hora / 60)
    * Perda/Refugo = custo base × perda%
    * Extras       = extras por peça × qtd (sem perda)
    * Custo total  = custo base + perda + extras
@@ -96,9 +125,13 @@
     var valorMinuto = valorHora / 60;
     var energia = detalhado ? e.tempo * e.energiaHora / 60 : 0;
     var desgaste = detalhado ? e.tempo * e.desgasteHora / 60 : 0;
-    var material = e.peso * valorGrama;
+    /* Peça multicor: e.cores = [{ gramas, precoKg }] e e.purgaG (purga + torre, em gramas). Sem e.cores vale o peso único. */
+    var multicor = Array.isArray(e.cores);
+    var rc = multicor ? resumirCores(e.cores, e.purgaG) : null;
+    var material = multicor ? rc.material : e.peso * valorGrama;
+    var purga = multicor ? rc.purga : 0;
     var impressao = detalhado ? energia + desgaste : e.tempo * valorMinuto;
-    var custoBase = material + impressao;
+    var custoBase = material + purga + impressao;
     var perda = custoBase * e.perdaPct / 100;
     var extras = extrasPeca * qtd;
     var custoTotal = custoBase + perda + extras;
@@ -116,7 +149,13 @@
       qtd: qtd,
       valorGrama: valorGrama,
       valorMinuto: valorMinuto,
-      material: material,
+      material: material,                                      // só o filamento das peças (sem a purga)
+      multicor: multicor,
+      pesoTotal: multicor ? rc.pesoCores : e.peso,             // gramas das peças (sem a purga)
+      purga: purga,                                            // R$ da purga + torre
+      purgaGramas: multicor ? rc.purgaG : 0,
+      precoMedioGrama: multicor ? rc.precoMedioGrama : 0,
+      materialTotal: material + purga,                         // material + purga
       impressao: impressao,
       detalhado: detalhado,
       energia: energia,
@@ -283,7 +322,7 @@
       whatsapp: negocio.whatsapp, instagram: negocio.instagram, cidade: negocio.cidade, cnpj: negocio.cnpj,
       cliente: limpa(o && o.cliente, 60),
       descricao: descricao,
-      material: limpa(o && o.material, 30),
+      material: limpa(o && o.material, 60),
       qtd: r.qtd,
       valorPeca: r.qtd > 1 ? moeda(r.valorUnitario) : '',
       total: moeda(r.valorCobrar),
@@ -342,6 +381,7 @@
     precoKgMaterial: precoKgMaterial, lerMateriais: lerMateriais, lerPesoRolo: lerPesoRolo,
     lerDinheiro: lerDinheiro, lerInteiro: lerInteiro, lerImpressora: lerImpressora, calcularImpressora: calcularImpressora,
     MAX_HORAS_ANO: MAX_HORAS_ANO,
+    MAX_CORES: MAX_CORES, resumirCores: resumirCores,
     MODOS_ARREDONDAMENTO: MODOS_ARREDONDAMENTO, lerArredondamento: lerArredondamento, arredondarCima: arredondarCima,
     NOME_PADRAO: NOME_PADRAO, LIMITES_NEGOCIO: LIMITES_NEGOCIO, VALIDADE_PADRAO: VALIDADE_PADRAO, MAX_REGISTROS: MAX_REGISTROS,
     lerNegocio: lerNegocio, formatarNumero: formatarNumero, formatarData: formatarData,
