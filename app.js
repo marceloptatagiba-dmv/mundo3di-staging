@@ -65,10 +65,14 @@
   var multicorAtivo = false;
   var cores = [{ id: null, g: '' }, { id: null, g: '' }];
   var purgaTxt = '';
+  /* Pedido do catálogo: peso e tempo proporcionais ficam exatos na conta, mesmo com o campo mostrando arredondado (5h13).
+     Vale só enquanto o campo continua com o texto que a tela colocou; se a pessoa digitar, vale o que foi digitado. */
+  var exato = {};      // { chave: { txt, val } } — chaves: peso, tempo, purga, c0, c1…
+  function lerExato(chave, txt, leitor) { var x = exato[chave]; return x && x.txt === txt ? x.val : leitor(txt); }
   function coresCalculo() {
-    return cores.map(function (c) {
+    return cores.map(function (c, i) {
       var f = materialPorId(config, c.id) || filamentoAtual();
-      return { gramas: C.lerNumero(c.g), precoKg: C.precoKgMaterial(f), nome: f.nome };
+      return { gramas: lerExato('c' + i, c.g, C.lerNumero), precoKg: C.precoKgMaterial(f), nome: f.nome };
     });
   }
   function nomesCores() {
@@ -115,8 +119,8 @@
   var outraAberta = false;
 
   function atualizar() {
-    var peso = C.lerNumero(ePeso.value);
-    var tempo = C.lerTempo(eTempo.value);
+    var peso = lerExato('peso', ePeso.value, C.lerNumero);
+    var tempo = lerExato('tempo', eTempo.value, C.lerTempo);
     var margem = C.lerNumero(eMargem.value);
     var qtd = C.lerQuantidade(eQtd.value);
     var extrasPeca = C.lerNumero(eExtras.value);
@@ -124,7 +128,7 @@
     var precoKg = C.precoKgMaterial(fil);
     var imp = config.modoHora === 'detalhado' ? C.calcularImpressora(config.impressora) : null;
     var cc = multicorAtivo ? coresCalculo() : null;
-    var r = C.calcular({ peso: peso, tempo: tempo, cores: cc, purgaG: multicorAtivo ? C.lerNumero(purgaTxt) : 0, margemPct: margem, qtd: qtd, extrasPeca: extrasPeca,
+    var r = C.calcular({ peso: peso, tempo: tempo, cores: cc, purgaG: multicorAtivo ? lerExato('purga', purgaTxt, C.lerNumero) : 0, margemPct: margem, qtd: qtd, extrasPeca: extrasPeca,
       precoKg: precoKg, valorHora: config.valorHora, perdaPct: config.perdaPct, minimo: config.minimo,
       energiaHora: imp ? imp.energiaHora : undefined, desgasteHora: imp ? imp.desgasteHora : undefined,
       arredondar: config.arredondamento });
@@ -179,6 +183,7 @@
     $('margem-campo').hidden = !outraAberta;
     ultimoValor = moeda(r.valorCobrar);
     ultimoOrcamento = r;
+    desenharVinculo();
   }
   var ultimoValor = 'R$ 0,00';
   var ultimoOrcamento = null;
@@ -242,7 +247,7 @@
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !folhaCores.hidden) fecharCores(); });
 
   $('limpar').addEventListener('click', function () {
-    outraAberta = false;
+    outraAberta = false; exato = {}; vinculo = null;
     purgaTxt = ''; cores.forEach(function (c) { c.g = ''; });
     ePeso.value = ''; eTempo.value = ''; eQtd.value = '1'; eExtras.value = ''; eMargem.value = String(C.PADROES.margemPct);
     atualizar(); ePeso.focus();
@@ -290,26 +295,29 @@
   /* O que está digitado na mesa agora (guardado no registro para "Usar de novo") */
   function entradaAtual() {
     var fil = filamentoAtual();
-    var o = { peso: C.lerNumero(ePeso.value), tempoMin: C.lerTempo(eTempo.value), qtd: C.lerQuantidade(eQtd.value),
+    var o = { peso: lerExato('peso', ePeso.value, C.lerNumero), tempoMin: lerExato('tempo', eTempo.value, C.lerTempo), qtd: C.lerQuantidade(eQtd.value),
       extras: C.lerNumero(eExtras.value), margem: C.lerNumero(eMargem.value), materialId: fil.id, materialNome: fil.nome };
     if (multicorAtivo) {
-      o.cores = cores.map(function (c) {
+      o.cores = cores.map(function (c, i) {
         var f = materialPorId(config, c.id) || fil;
-        return { materialId: f.id, nome: f.nome, gramas: C.lerNumero(c.g) };
+        return { materialId: f.id, nome: f.nome, gramas: lerExato('c' + i, c.g, C.lerNumero) };
       });
-      o.purgaG = C.lerNumero(purgaTxt);
+      o.purgaG = lerExato('purga', purgaTxt, C.lerNumero);
     }
     return D.montarEntrada(o);
   }
   /* Grava o envio novo: avança o contador e guarda o registro com data e hora. Chamado só quando o envio aconteceu. */
   function registrarEnvio(numero, formato, extra) {
     var reg = D.novoRegistro(extra.orcamento, { numero: numero, formato: formato, material: extra.material, cliente: extra.cliente,
-      descricao: extra.descricao, entrada: extra.entrada, prazo: extra.prazo, validadeAte: extra.validadeAte, versaoApp: versaoEmUso });
+      descricao: extra.descricao, entrada: extra.entrada, prazo: extra.prazo, validadeAte: extra.validadeAte, versaoApp: versaoEmUso,
+      catalogoId: pecaVinculada() ? vinculo.id : '' });
     try {
       localStorage.setItem(CHAVE_CONT, String(numero));
       var lista = JSON.parse(localStorage.getItem(CHAVE_REG) || '[]');
       localStorage.setItem(CHAVE_REG, JSON.stringify(D.adicionarRegistro(lista, reg, D.MAX_REGISTROS)));
     } catch (e) { /* armazenamento indisponível: o envio continua valendo, só não fica registrado */ }
+    /* Peça do catálogo: o valor enviado vira a referência e ela sobe de uso */
+    if (reg.catalogoId) gravarCatalogo(D.registrarUsoPeca(lerCatalogo(), reg.catalogoId, reg.valorPeca, new Date(reg.ts)));
   }
   /* Reenvio: mesmo número, o contador não anda; soma 1 em "reenvios" */
   function registrarReenvio(reg, extra) {
@@ -348,7 +356,7 @@
     envioReg = reg || null;
     if (!envioReg && (!ultimoOrcamento || ultimoOrcamento.valorCobrar <= 0)) { avisar('Preencha peso e tempo primeiro'); return; }
     eCliente.value = envioReg ? envioReg.cliente : '';
-    eImgDesc.value = envioReg ? envioReg.descricao : '';
+    eImgDesc.value = envioReg ? envioReg.descricao : (pecaVinculada() ? D.descricaoDaPeca(pecaVinculada()) : '');
     eImgPrazo.value = envioReg && envioReg.prazo ? envioReg.prazo : config.negocio.prazo;
     $('painel-imagem').hidden = true; $('abrir-imagem').setAttribute('aria-pressed', 'false');
     $('folha-rotulo').textContent = envioReg ? 'Reenviar orçamento' : 'Enviar orçamento';
@@ -711,7 +719,7 @@
   /* ---------- Backup, restauração e planilha ---------- */
   var CHAVE_BACKUP = CHAVE + '-backup';              // { em, qtd }: último backup feito (data e quantos orçamentos havia)
   var CHAVE_ANTES = CHAVE + '-antes-restaurar';      // { em, dados }: o estado de antes da última restauração (para desfazer)
-  var CHAVE_CAT = CHAVE + '-catalogo';               // catálogo de peças (chega na etapa seguinte; já entra no backup)
+  var CHAVE_CAT = CHAVE + '-catalogo';               // catálogo de peças recorrentes (também entra no backup)
   var emEntrega = false;                             // arquivo sendo compartilhado: evita toque duplo
 
   function lerJSON(chave) { try { return JSON.parse(localStorage.getItem(chave) || 'null'); } catch (e) { return null; } }
@@ -725,7 +733,7 @@
     var cfg = lerJSON(CHAVE), cont = 0;
     try { cont = parseInt(localStorage.getItem(CHAVE_CONT) || '0', 10) || 0; } catch (e) {}
     return D.montarDados({ config: cfg && typeof cfg === 'object' && !Array.isArray(cfg) ? cfg : config, logo: lerLogoSalvo(), contador: cont,
-      registros: lerLista(), catalogo: lerJSON(CHAVE_CAT), materialAtual: materialAtual || '' });
+      registros: lerLista(), catalogo: D.lerCatalogo(lerJSON(CHAVE_CAT)), materialAtual: materialAtual || '' });
   }
   function gravarDados(d) {
     try {
@@ -742,7 +750,7 @@
   function aplicarNaTela() {
     config = carregarConfig();
     try { materialAtual = localStorage.getItem(CHAVE_MAT); } catch (e) { materialAtual = null; }
-    montarSeletor(); atualizar();
+    montarSeletor(); validarVinculo(); atualizar();
     preencherConfig(config); configInicial = JSON.stringify(lerConfigTela());
     desenharBackup();
   }
@@ -1002,8 +1010,7 @@
       : reg.statusEm && reg.status !== 'enviado' ? D.ROTULOS_SITUACAO[reg.status] + ' em ' + dm(reg.statusEm) : '';
     $('det-antigo').hidden = !!reg.entrada;
     $('det-usar').disabled = !reg.entrada;
-    $('det-catalogo').disabled = true;          // o catálogo chega na etapa 4
-    $('det-cat-nota').hidden = false;
+    $('det-catalogo').disabled = !reg.entrada;  // registro antigo, sem os dados da mesa, não vira peça
   }
   function abrirDetalhe(reg) {
     detChave = D.chaveRegistro(reg);
@@ -1043,6 +1050,14 @@
     fecharSheetsHist();
     usarDeNovo(reg);
   });
+  $('det-catalogo').addEventListener('click', function () {
+    guardarEdicao();
+    var reg = regAberto(); if (!reg || !reg.entrada) return;
+    fecharSheetsHist();
+    var calc = calcularEntrada(reg.entrada);
+    abrirSalvar({ entrada: reg.entrada, precoRef: reg.valorPeca, precoRefEm: reg.ts, precoHoje: calc.r.valorUnitario, ligar: false },
+      D.limparTexto(reg.descricao, 40));
+  });
   $('det-excluir').addEventListener('click', function () {
     var reg = regAberto(); if (!reg) return;
     $('excluir-txt').textContent = 'O orçamento Nº ' + C.formatarNumero(reg.n) + ' sai do histórico. O número dele não volta: o próximo orçamento continua de onde parou.';
@@ -1064,6 +1079,16 @@
   function usarDeNovo(reg) {
     var c = D.entradaParaCampos(reg.entrada);
     if (!c) return;
+    var aviso = preencherTela(c);
+    exato = {};
+    var peca = reg.catalogoId ? D.acharPeca(lerCatalogo(), reg.catalogoId) : null;
+    vinculo = peca ? { id: peca.id, nome: peca.nome } : null;
+    atualizar();
+    sairConfig();
+    avisar(aviso || 'Dados do orçamento Nº ' + C.formatarNumero(reg.n) + ' na tela');
+  }
+  /* Põe na tela principal os campos de uma entrada (c = D.entradaParaCampos). Devolve um aviso, se algum filamento não existe mais. */
+  function preencherTela(c) {
     var aviso = '';
     ePeso.value = c.peso; eTempo.value = c.tempo; eQtd.value = c.qtd; eExtras.value = c.extras; eMargem.value = c.margem;
     outraAberta = c.outra;
@@ -1077,20 +1102,265 @@
       if (m) { materialAtual = m.id; try { localStorage.setItem(CHAVE_MAT, materialAtual); } catch (e) {} }
       else if (c.materialNome) aviso = 'O filamento “' + c.materialNome + '” não existe mais: usei ' + filamentoAtual().nome;
     }
-    montarSeletor(); aplicarModoMulticor(); atualizar();
-    sairConfig();
-    avisar(aviso || 'Dados do orçamento Nº ' + C.formatarNumero(reg.n) + ' na tela');
+    montarSeletor(); aplicarModoMulticor();
+    return aviso;
   }
 
+  /* ---------- Catálogo de peças recorrentes ---------- */
+  var vinculo = null;                  // peça do catálogo ligada ao orçamento da tela: { id, nome }
+  function lerCatalogo() { return D.lerCatalogo(lerJSON(CHAVE_CAT)); }
+  function gravarCatalogo(lista) {
+    try { localStorage.setItem(CHAVE_CAT, JSON.stringify(lista)); return true; } catch (e) { avisar('Não deu para salvar'); return false; }
+  }
+  function pecaVinculada() { return vinculo ? D.acharPeca(lerCatalogo(), vinculo.id) : null; }
+  /* Se a peça ligada foi excluída (ou o backup trocou o catálogo), desliga; senão pega o nome de hoje */
+  function validarVinculo() {
+    var p = pecaVinculada();
+    vinculo = p ? { id: p.id, nome: p.nome } : null;
+    desenharVinculo();
+  }
+  /* Título do cartão: link "Catálogo" ou selo com o nome da peça, a quantidade e o × */
+  function desenharVinculo() {
+    var cheio = !!vinculo;
+    $('cat-link').classList.toggle('cheio', cheio);
+    $('cat-desvincular').hidden = !cheio;
+    $('cat-link-txt').textContent = cheio ? vinculo.nome + ' · ' + C.lerQuantidade(eQtd.value) : 'Catálogo';
+  }
+  $('cat-desvincular').addEventListener('click', function () { vinculo = null; desenharVinculo(); });
+
+  /* Cálculo de uma entrada com os custos de hoje. Filamento que não existe mais: usa o padrão e avisa. */
+  function calcularEntrada(e) {
+    var padrao = materialPorId(config, config.materialPadrao) || config.materiais[0], faltando = [];
+    function fil(id, nome, avisar) {
+      var m = materialPorId(config, id);
+      if (m) return m;
+      if (avisar && nome && faltando.indexOf(nome) < 0) faltando.push(nome);
+      return padrao;
+    }
+    var multi = !!(e.cores && e.cores.length);
+    var f0 = fil(e.materialId, e.materialNome, !multi);
+    var cc = multi ? e.cores.map(function (c) { var f = fil(c.materialId, c.nome, true); return { gramas: c.gramas, precoKg: C.precoKgMaterial(f), nome: f.nome }; }) : null;
+    var imp = config.modoHora === 'detalhado' ? C.calcularImpressora(config.impressora) : null;
+    var r = C.calcular({ peso: e.peso, tempo: e.tempoMin, cores: cc, purgaG: multi ? e.purgaG : 0, margemPct: e.margem, qtd: e.qtd, extrasPeca: e.extras,
+      precoKg: C.precoKgMaterial(f0), valorHora: config.valorHora, perdaPct: config.perdaPct, minimo: config.minimo,
+      energiaHora: imp ? imp.energiaHora : undefined, desgasteHora: imp ? imp.desgasteHora : undefined, arredondar: config.arredondamento });
+    var aviso = '';
+    if (faltando.length === 1) aviso = 'Filamento ' + faltando[0] + ' foi excluído; usando ' + padrao.nome;
+    else if (faltando.length > 1) aviso = 'Filamentos ' + faltando.join(', ') + ' foram excluídos; usando ' + padrao.nome;
+    return { r: r, aviso: aviso };
+  }
+
+  /* Tela do catálogo */
+  var catTimerBusca;
+  function fecharPaineisCat() { ['folha-cat-salvar', 'folha-cat-pedido', 'folha-cat-editar'].forEach(function (id) { $(id).hidden = true; }); salvando = null; pedido = null; editando = null; }
+  function desenharCat() {
+    var todos = lerCatalogo(), busca = $('cat-busca').value.trim(), lista = D.filtrarCatalogo(todos, busca);
+    var ok = !!(ultimoOrcamento && ultimoOrcamento.valorCobrar > 0);
+    $('cat-salvar-atual').disabled = !ok;
+    $('cat-atual-txt').textContent = ok ? D.descreverEntrada(entradaAtual()) + ' · ' + moeda(ultimoOrcamento.valorUnitario) + ' por peça' : 'Preencha peso e tempo na calculadora primeiro';
+    $('cat-busca-caixa').hidden = todos.length === 0;
+    var box = $('cat-lista'); box.textContent = '';
+    if (lista.length) {
+      var bloco = el('div', 'lista-hist');
+      lista.forEach(function (p) {
+        var c = calcularEntrada(p.entrada), unit = c.r.valorUnitario;
+        var it = el('button', 'cat'); it.type = 'button';
+        var topo = el('div', 'topo'); topo.appendChild(el('strong', '', p.nome));
+        var b = el('b', '', moeda(unit)); b.appendChild(el('small', '', ' /peça')); topo.appendChild(b);
+        var info = el('div', 'info');
+        var mat = D.materialDoRegistro({ entrada: p.entrada });
+        info.appendChild(el('span', '', [p.entrada.qtd + ' por mesa', mat, p.usadoEm ? 'usado ' + dm(p.usadoEm) : 'salvo ' + dm(p.precoRefEm)].filter(Boolean).join(' · ')));
+        if (p.precoRef > 0) {
+          var cmp = D.compararPreco(unit, p.precoRef);
+          info.appendChild(el('span', 'var ' + cmp.tipo, cmp.tipo === 'igual' ? '= último envio'
+            : (cmp.tipo === 'sobe' ? '↑ ' : '↓ ') + moeda(cmp.diff) + (p.precoRefEm ? ' desde ' + dm(p.precoRefEm) : '')));
+        }
+        it.appendChild(topo); it.appendChild(info);
+        if (c.aviso) it.appendChild(el('p', 'alerta', c.aviso));
+        it.addEventListener('click', function () { abrirPedido(p.id); });
+        bloco.appendChild(it);
+      });
+      box.appendChild(bloco);
+    }
+    var vazio = $('cat-vazio');
+    vazio.hidden = lista.length > 0;
+    vazio.textContent = todos.length === 0 ? 'Nenhuma peça salva. Calcule uma peça e toque em “Salvar o orçamento atual”.' : 'Nenhuma peça encontrada.';
+    $('cat-nota').hidden = lista.length === 0;
+  }
+  $('cat-busca').addEventListener('input', function () { clearTimeout(catTimerBusca); catTimerBusca = setTimeout(desenharCat, 150); });
+
+  /* Salvar no catálogo (da calculadora ou do detalhe do histórico) */
+  var salvando = null;     // { entrada, precoRef, precoRefEm, precoHoje, ligar, confirmado: nome normalizado já confirmado para substituir }
+  function abrirSalvar(info, nomeSugerido) {
+    salvando = info; salvando.confirmado = '';
+    $('cs-nome').value = nomeSugerido || ''; $('cs-desc').value = '';
+    $('cs-resumo').textContent = D.descreverEntrada(info.entrada);
+    $('cs-preco').textContent = 'Hoje ' + moeda(info.precoHoje) + ' por peça';
+    textoBotaoSalvar();
+    $('cs-aviso').hidden = true;
+    $('folha-cat-salvar').hidden = false;
+    $('cs-nome').focus();
+  }
+  function textoBotaoSalvar() {
+    var ex = salvando && D.pecaComNome(lerCatalogo(), $('cs-nome').value);
+    var confirmando = ex && salvando.confirmado === D.normalizarBusca(ex.nome);
+    $('cs-salvar').textContent = ex ? 'Substituir “' + ex.nome + '”' : 'Salvar';
+    if (!ex) { salvando && (salvando.confirmado = ''); $('cs-aviso').hidden = true; }
+    return confirmando;
+  }
+  $('cs-nome').addEventListener('input', textoBotaoSalvar);
+  selecionarAoFocar($('cs-nome'));
+  $('cat-salvar-atual').addEventListener('click', function () {
+    if (!ultimoOrcamento || ultimoOrcamento.valorCobrar <= 0) return;
+    abrirSalvar({ entrada: entradaAtual(), precoRef: ultimoOrcamento.valorUnitario, precoHoje: ultimoOrcamento.valorUnitario, ligar: true },
+      vinculo ? vinculo.nome : '');
+  });
+  $('cs-salvar').addEventListener('click', function () {
+    if (!salvando) return;
+    var nome = D.limparTexto($('cs-nome').value, 40);
+    if (!nome) { $('cs-aviso').textContent = 'Dê um nome para a peça.'; $('cs-aviso').hidden = false; $('cs-nome').focus(); return; }
+    var ex = D.pecaComNome(lerCatalogo(), nome);
+    if (ex && salvando.confirmado !== D.normalizarBusca(ex.nome)) {     // primeiro toque: pergunta; segundo toque: substitui
+      salvando.confirmado = D.normalizarBusca(ex.nome);
+      $('cs-aviso').textContent = 'Já existe “' + ex.nome + '”. Toque de novo para substituir.'; $('cs-aviso').hidden = false;
+      return;
+    }
+    var res = D.salvarPeca(lerCatalogo(), { nome: nome, descricao: $('cs-desc').value, entrada: salvando.entrada, precoRef: salvando.precoRef, precoRefEm: salvando.precoRefEm }, !!ex);
+    if (!res.ok) {
+      $('cs-aviso').textContent = res.erro === 'cheio' ? 'O catálogo está cheio (' + D.MAX_CATALOGO + ' peças). Exclua uma peça para salvar outra.' : 'Não foi possível salvar.';
+      $('cs-aviso').hidden = false; return;
+    }
+    if (!gravarCatalogo(res.lista)) return;
+    if (salvando.ligar) { vinculo = { id: res.peca.id, nome: res.peca.nome }; desenharVinculo(); }
+    else if (vinculo && vinculo.id === res.peca.id) { vinculo.nome = res.peca.nome; desenharVinculo(); }
+    var veioDoCat = !$('tela-cat').hidden;
+    $('folha-cat-salvar').hidden = true; salvando = null;
+    if (veioDoCat) desenharCat();
+    avisar(res.substituiu ? 'Peça substituída no catálogo' : 'Peça salva no catálogo');
+  });
+  function fecharSalvar() { $('folha-cat-salvar').hidden = true; salvando = null; }
+  $('cs-fechar').addEventListener('click', fecharSalvar);
+  $('cs-fundo').addEventListener('click', fecharSalvar);
+
+  /* Pedido: quantidade, total ao vivo e os três caminhos (enviar, abrir na calculadora, editar) */
+  var pedido = null;       // { id }
+  function qtdPedido() { return C.lerQuantidade($('cp-qtd').value); }
+  function abrirPedido(id) {
+    var p = D.acharPeca(lerCatalogo(), id); if (!p) return;
+    pedido = { id: id };
+    $('cp-titulo').textContent = p.nome;
+    $('cp-sub').textContent = D.descreverEntrada(p.entrada);
+    $('cp-qtd').value = String(p.entrada.qtd);
+    var box = $('cp-atalhos'); box.textContent = '';
+    D.atalhosPedido(p.entrada).forEach(function (n) {
+      var b = el('button', 'chip'); b.type = 'button';
+      b.appendChild(el('span', '', String(n)));
+      var rot = p.entrada.qtd > 1 && n === p.entrada.qtd ? '1 mesa' : p.entrada.qtd > 1 && n === p.entrada.qtd * 2 ? '2 mesas' : '';
+      if (rot) b.appendChild(el('small', '', rot));
+      b.addEventListener('click', function () { $('cp-qtd').value = String(n); desenharPedido(); });
+      box.appendChild(b);
+    });
+    $('folha-cat-pedido').hidden = false;
+    desenharPedido();
+  }
+  function desenharPedido() {
+    var p = pedido && D.acharPeca(lerCatalogo(), pedido.id); if (!p) return;
+    var q = qtdPedido(), c = calcularEntrada(D.entradaDoPedido(p.entrada, q));
+    $('cp-total').textContent = moeda(c.r.valorCobrar);
+    $('cp-ref').textContent = moeda(c.r.valorUnitario) + ' cada' + (p.precoRef > 0 ? ' · último envio: ' + moeda(p.precoRef) + (p.precoRefEm ? ' em ' + dm(p.precoRefEm) : '') : '');
+    $('cp-alerta').textContent = c.aviso; $('cp-alerta').hidden = !c.aviso;
+    Array.prototype.forEach.call($('cp-atalhos').children, function (b) { b.setAttribute('aria-pressed', String(b.firstChild.textContent === String(q))); });
+  }
+  $('cp-qtd').addEventListener('input', desenharPedido);
+  selecionarAoFocar($('cp-qtd'));
+  $('cp-menos').addEventListener('click', function () { $('cp-qtd').value = String(Math.max(1, qtdPedido() - 1)); desenharPedido(); });
+  $('cp-mais').addEventListener('click', function () { $('cp-qtd').value = String(Math.min(9999, qtdPedido() + 1)); desenharPedido(); });
+  function fecharPedido() { $('folha-cat-pedido').hidden = true; pedido = null; }
+  $('cp-fechar').addEventListener('click', fecharPedido);
+  $('cp-fundo').addEventListener('click', fecharPedido);
+
+  /* Põe o pedido na tela principal (peso e tempo proporcionais ficam exatos na conta) e liga a peça ao orçamento */
+  function pedidoNaTela(p, q) {
+    var e = D.entradaDoPedido(p.entrada, q), c = D.entradaParaCampos(e);
+    function g2(n) { return D.textoCampo(Math.round(n * 100) / 100); }
+    var ex = {};
+    if (!c.multicor) { c.peso = g2(e.peso); ex.peso = { txt: c.peso, val: e.peso }; }
+    c.tempo = D.textoTempo(Math.round(e.tempoMin)); ex.tempo = { txt: c.tempo, val: e.tempoMin };
+    if (c.multicor) {
+      c.cores.forEach(function (x, i) { x.g = g2(e.cores[i].gramas); ex['c' + i] = { txt: x.g, val: e.cores[i].gramas }; });
+      c.purga = g2(e.purgaG); ex.purga = { txt: c.purga, val: e.purgaG };
+    }
+    var aviso = preencherTela(c);
+    exato = ex;
+    vinculo = { id: p.id, nome: p.nome };
+    atualizar();
+    return aviso;
+  }
+  $('cp-abrir').addEventListener('click', function () {
+    var p = pedido && D.acharPeca(lerCatalogo(), pedido.id); if (!p) return;
+    var aviso = pedidoNaTela(p, qtdPedido());
+    fecharPedido(); sairConfig();
+    avisar(aviso || 'Peça “' + p.nome + '” na tela');
+  });
+  $('cp-enviar').addEventListener('click', function () {
+    var p = pedido && D.acharPeca(lerCatalogo(), pedido.id); if (!p) return;
+    pedidoNaTela(p, qtdPedido());
+    fecharPedido(); sairConfig();
+    abrirFolha(null);                // direto no painel de envio, com a descrição da peça já preenchida
+  });
+
+  /* Editar: nome, descrição e excluir */
+  var editando = null;     // { id, excluir: true quando já pediu a confirmação }
+  $('cp-editar').addEventListener('click', function () {
+    var p = pedido && D.acharPeca(lerCatalogo(), pedido.id); if (!p) return;
+    fecharPedido();
+    editando = { id: p.id, excluir: false };
+    $('ce-nome').value = p.nome; $('ce-desc').value = p.descricao;
+    $('ce-aviso').hidden = true; $('ce-excluir').textContent = 'Excluir peça';
+    $('folha-cat-editar').hidden = false;
+  });
+  selecionarAoFocar($('ce-nome'));
+  $('ce-salvar').addEventListener('click', function () {
+    if (!editando) return;
+    var res = D.editarPeca(lerCatalogo(), editando.id, { nome: $('ce-nome').value, descricao: $('ce-desc').value });
+    if (!res.ok) {
+      $('ce-aviso').textContent = res.erro === 'existe' ? 'Já existe outra peça com esse nome.' : 'Dê um nome para a peça.';
+      $('ce-aviso').hidden = false; return;
+    }
+    if (!gravarCatalogo(res.lista)) return;
+    $('folha-cat-editar').hidden = true; editando = null;
+    validarVinculo(); desenharCat(); avisar('Peça atualizada');
+  });
+  $('ce-excluir').addEventListener('click', function () {
+    if (!editando) return;
+    if (!editando.excluir) {      // primeiro toque pede a confirmação
+      editando.excluir = true; $('ce-excluir').textContent = 'Toque de novo para excluir';
+      $('ce-aviso').textContent = 'A peça sai do catálogo. Os orçamentos já enviados continuam no histórico.'; $('ce-aviso').hidden = false;
+      return;
+    }
+    if (!gravarCatalogo(D.excluirPeca(lerCatalogo(), editando.id))) return;
+    $('folha-cat-editar').hidden = true; editando = null;
+    validarVinculo(); desenharCat(); avisar('Peça excluída');
+  });
+  function fecharEditar() { $('folha-cat-editar').hidden = true; editando = null; }
+  $('ce-fechar').addEventListener('click', fecharEditar);
+  $('ce-fundo').addEventListener('click', fecharEditar);
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (!$('folha-cat-editar').hidden) fecharEditar(); else if (!$('folha-cat-salvar').hidden) fecharSalvar(); else if (!$('folha-cat-pedido').hidden) fecharPedido();
+  });
+
   /* ---------- Navegação (o botão voltar do Android funciona) ---------- */
-  function telaDaRota() { return location.hash === '#config' ? 'config' : location.hash === '#historico' ? 'hist' : 'calc'; }
+  function telaDaRota() { return location.hash === '#config' ? 'config' : location.hash === '#historico' ? 'hist' : location.hash === '#catalogo' ? 'cat' : 'calc'; }
   function mostrar(tela) {
     $('tela-calc').hidden = tela !== 'calc';
     $('tela-config').hidden = tela !== 'config';
     $('tela-hist').hidden = tela !== 'hist';
+    $('tela-cat').hidden = tela !== 'cat';
     if (tela === 'config') { preencherConfig(config); configInicial = JSON.stringify(lerConfigTela()); desenharBackup(); }
     else fecharPaineisBackup();
     if (tela === 'hist') desenharHist(); else fecharSheetsHist();
+    if (tela === 'cat') { $('cat-busca').value = ''; desenharCat(); } else fecharPaineisCat();
     desenharVersao();
     window.scrollTo(0, 0);
   }
@@ -1109,6 +1379,8 @@
   $('ir-hist').addEventListener('click', function () { veioDaCalc = true; location.hash = 'historico'; });
   $('voltar').addEventListener('click', sairConfig);
   $('hist-voltar').addEventListener('click', sairConfig);
+  $('cat-voltar').addEventListener('click', sairConfig);
+  $('cat-abrir').addEventListener('click', function () { veioDaCalc = true; location.hash = 'catalogo'; });
 
   /* ---------- Convite para instalar ---------- */
   var instalado = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -1163,7 +1435,8 @@
   /* O que foi digitado na tela principal, guardado só até a página recarregar */
   function estadoParaRetomar() {
     return { peso: ePeso.value, tempo: eTempo.value, qtd: eQtd.value, extras: eExtras.value, margem: eMargem.value, outra: outraAberta,
-      multicor: multicorAtivo, cores: cores.map(function (c) { return { id: c.id, g: c.g }; }), purga: purgaTxt };
+      multicor: multicorAtivo, cores: cores.map(function (c) { return { id: c.id, g: c.g }; }), purga: purgaTxt,
+      vinculo: vinculo ? { id: vinculo.id, nome: vinculo.nome } : null };
   }
   function retomarCampos() {
     var d = null;
@@ -1174,6 +1447,7 @@
     eMargem.value = txt(d.margem) || String(C.PADROES.margemPct);
     outraAberta = d.outra === true;
     purgaTxt = txt(d.purga);
+    if (d.vinculo && typeof d.vinculo.id === 'string' && d.vinculo.id) vinculo = { id: txt(d.vinculo.id), nome: txt(d.vinculo.nome) };
     if (d.multicor === true && Array.isArray(d.cores) && d.cores.length) {
       multicorAtivo = true;
       cores = d.cores.slice(0, C.MAX_CORES).map(function (c) { return { id: c && typeof c.id === 'string' ? c.id : null, g: txt(c && c.g) }; });
@@ -1256,6 +1530,7 @@
 
   /* ---------- Início ---------- */
   retomarCampos();            // devolve o que estava na tela antes de "Atualizar" (uma única vez)
+  validarVinculo();           // a peça do catálogo ainda existe? (o nome mostrado vem do catálogo)
   montarSeletor();
   if (multicorAtivo) aplicarModoMulticor();
   rota();

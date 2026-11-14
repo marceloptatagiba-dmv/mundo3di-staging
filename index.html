@@ -266,6 +266,48 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 .nota-antigo{margin:0;font-size:12px;font-weight:600;line-height:1.4;color:#8A4B04}
 .nota-antigo[hidden]{display:none}
 .ajuda[hidden]{display:none}
+/* catálogo de peças */
+.titulo-linha{display:flex;align-items:center;justify-content:space-between;gap:8px;height:16px}
+.titulo-linha .titulo-secao{white-space:nowrap;flex-shrink:0}
+.link-titulo{display:flex;align-items:center;min-width:0;flex:0 1 auto;height:30px;margin:-7px 0;font-size:13px;font-weight:700;color:var(--verde-texto)}
+.link-titulo .lt-abrir{flex:1 1 auto}
+.link-titulo button{position:relative;display:flex;align-items:center;gap:5px;height:30px;min-width:0;border:0;background:none;color:inherit;font:inherit;padding:0 2px;white-space:nowrap}
+.link-titulo button::after{content:"";position:absolute;inset:-7px -2px}
+.link-titulo svg{flex-shrink:0}
+.link-titulo span{overflow:hidden;text-overflow:ellipsis}
+.link-titulo.cheio{background:#EEF5E6;border-radius:999px;padding-left:10px}
+.link-titulo .lt-x{width:30px;justify-content:center;padding:0;flex-shrink:0}
+.link-titulo .lt-x[hidden]{display:none}
+#tela-cat main{gap:10px;padding-top:12px}
+.salvar-atual{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:1.5px dashed var(--verde);border-radius:14px;background:#fff;text-align:left;color:var(--preto)}
+.salvar-atual:disabled{opacity:.45}
+.salvar-atual .mais-ic{width:36px;height:36px;border-radius:10px;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.salvar-atual p{margin:0;flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.salvar-atual strong{font-size:14px;font-weight:800}
+.salvar-atual span{font-size:12px;font-weight:500;color:var(--suave)}
+.cat{display:flex;flex-direction:column;gap:8px;width:100%;padding:12px 16px;border:0;border-top:1px solid var(--linha);background:#fff;text-align:left;color:var(--preto)}
+.cat:first-child{border-top:0}
+.cat .topo{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.cat .topo strong{font-size:15px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat .topo b{font-size:16px;font-weight:800;white-space:nowrap}
+.cat .topo b small{font-size:11px;font-weight:600;color:var(--suave)}
+.cat .info{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:12px;font-weight:500;color:var(--suave)}
+.cat .info>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.var{font-size:11px;font-weight:700;border-radius:999px;padding:3px 8px;white-space:nowrap;flex-shrink:0}
+.var.sobe{background:#FDF0D6;color:#8A4B04}
+.var.igual,.var.desce{background:#EEF1EC;color:var(--suave)}
+.alerta{margin:0;font-size:12px;font-weight:600;line-height:1.4;color:#8A4B04}
+.alerta[hidden]{display:none}
+.stepper{display:grid;grid-template-columns:56px minmax(0,1fr) 56px;gap:8px;align-items:center}
+.stepper button{height:52px;border-radius:12px;border:1.5px solid var(--borda);background:#fff;font-size:24px;font-weight:700;padding:0}
+.stepper .caixa{height:52px;justify-content:center}
+.stepper .caixa input{text-align:center;font-size:24px}
+.chips.atalhos-ped .chip{flex:1;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.1;padding:0 4px}
+.chips.atalhos-ped .chip small{font-size:10px;font-weight:600}
+.salvo-box{background:var(--fundo);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.salvo-box .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--suave)}
+.salvo-box strong{font-size:14px;font-weight:700}
+.salvo-box span{font-size:12px;font-weight:500;color:var(--suave)}
 </style>
 </head>
 <body>
@@ -298,7 +340,13 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
       </div>
 
       <section class="cartao" aria-labelledby="t-dados">
-        <h2 class="titulo-secao" id="t-dados">Dados da peça</h2>
+        <div class="titulo-linha">
+          <h2 class="titulo-secao" id="t-dados">Dados da peça</h2>
+          <span class="link-titulo" id="cat-link">
+            <button type="button" class="lt-abrir" id="cat-abrir" aria-label="Abrir o catálogo de peças"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h14v16H6.5A2.5 2.5 0 0 0 4 21.5"/><path d="M20 19v3H6.5"/></svg><span id="cat-link-txt">Catálogo</span></button>
+            <button type="button" class="lt-x" id="cat-desvincular" aria-label="Desvincular a peça do catálogo" hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </span>
+        </div>
         <div class="grade2">
           <div class="campo">
             <span class="rot-linha"><label for="peso">Peso da mesa</label>
@@ -562,6 +610,26 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
     </main>
   </section>
 
+  <!-- TELA: CATÁLOGO DE PEÇAS -->
+  <section class="tela" id="tela-cat" aria-label="Catálogo de peças" hidden>
+    <header>
+      <button class="icone" type="button" id="cat-voltar" aria-label="Voltar">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      </button>
+      <h1>Catálogo</h1>
+    </header>
+    <main>
+      <button class="salvar-atual" type="button" id="cat-salvar-atual">
+        <span class="mais-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+        <p><strong>Salvar o orçamento atual</strong><span id="cat-atual-txt"></span></p>
+      </button>
+      <label class="caixa busca" id="cat-busca-caixa"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4A524A" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="cat-busca" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="Buscar peça" aria-label="Buscar peça"></label>
+      <div id="cat-lista"></div>
+      <p class="vazio" id="cat-vazio" hidden></p>
+      <p class="ajuda neutra" id="cat-nota" hidden>Preços recalculados com os custos de hoje (filamento, hora, perda e arredondamento).</p>
+    </main>
+  </section>
+
 </div>
 <!-- PAINEL: ENVIAR ORÇAMENTO (texto ou imagem) -->
 <div class="folha" id="folha-cores" hidden>
@@ -650,10 +718,63 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
       <button class="btn" type="button" id="det-usar">Usar de novo</button>
     </div>
     <div class="grade2">
-      <button class="btn mais peq" type="button" id="det-catalogo" disabled>Salvar no catálogo</button>
+      <button class="btn mais peq" type="button" id="det-catalogo">Salvar no catálogo</button>
       <button class="btn mais peq perigo" type="button" id="det-excluir">Excluir</button>
     </div>
-    <p class="ajuda neutra" id="det-cat-nota" hidden>O catálogo chega numa próxima versão.</p>
+  </div>
+</div>
+
+<!-- PAINEL: SALVAR NO CATÁLOGO -->
+<div class="folha" id="folha-cat-salvar" hidden>
+  <div class="folha-fundo" id="cs-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="cs-titulo">
+    <div class="folha-topo"><strong id="cs-titulo">Salvar no catálogo</strong>
+      <button class="fechar" type="button" id="cs-fechar" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <label class="campo"><span>Nome da peça</span><span class="caixa texto"><input id="cs-nome" type="text" maxlength="40" autocomplete="off" placeholder="Ex.: Suporte de celular"></span></label>
+    <label class="campo"><span>Descrição para o cliente (opcional)</span><span class="caixa texto"><input id="cs-desc" type="text" maxlength="120" autocomplete="off" placeholder="Igual ao nome"></span></label>
+    <div class="salvo-box"><span class="tag">O que fica salvo</span><strong id="cs-resumo"></strong><span id="cs-preco"></span></div>
+    <p class="alerta" id="cs-aviso" hidden></p>
+    <button class="btn principal" type="button" id="cs-salvar">Salvar</button>
+  </div>
+</div>
+
+<!-- PAINEL: PEDIDO DE UMA PEÇA DO CATÁLOGO -->
+<div class="folha" id="folha-cat-pedido" hidden>
+  <div class="folha-fundo" id="cp-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="cp-titulo" style="gap:10px">
+    <div class="folha-topo"><strong id="cp-titulo"></strong>
+      <button class="fechar" type="button" id="cp-fechar" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <p class="ajuda neutra" id="cp-sub" style="margin-top:-6px"></p>
+    <p class="alerta" id="cp-alerta" hidden></p>
+    <div class="campo"><span>Quantidade do pedido</span>
+      <div class="stepper">
+        <button type="button" id="cp-menos" aria-label="Menos uma peça">−</button>
+        <label class="caixa"><input id="cp-qtd" type="text" inputmode="numeric" autocomplete="off" aria-label="Quantidade do pedido" value="1"></label>
+        <button type="button" id="cp-mais" aria-label="Mais uma peça">+</button>
+      </div>
+    </div>
+    <div class="chips atalhos-ped" id="cp-atalhos" role="group" aria-label="Quantidades comuns"></div>
+    <div class="linha"><div class="rot"><strong>Total do pedido</strong><span id="cp-ref"></span></div><span class="val" id="cp-total" style="font-size:20px;font-weight:800"></span></div>
+    <button class="btn principal" type="button" id="cp-enviar">Enviar orçamento</button>
+    <div class="grade2">
+      <button class="btn" type="button" id="cp-abrir">Abrir na calculadora</button>
+      <button class="btn" type="button" id="cp-editar">Editar</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAINEL: EDITAR PEÇA DO CATÁLOGO -->
+<div class="folha" id="folha-cat-editar" hidden>
+  <div class="folha-fundo" id="ce-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="ce-titulo">
+    <div class="folha-topo"><strong id="ce-titulo">Editar peça</strong>
+      <button class="fechar" type="button" id="ce-fechar" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <label class="campo"><span>Nome da peça</span><span class="caixa texto"><input id="ce-nome" type="text" maxlength="40" autocomplete="off"></span></label>
+    <label class="campo"><span>Descrição para o cliente (opcional)</span><span class="caixa texto"><input id="ce-desc" type="text" maxlength="120" autocomplete="off" placeholder="Igual ao nome"></span></label>
+    <p class="ajuda neutra">Para mudar peso, tempo ou margem, abra a peça na calculadora e salve de novo com o mesmo nome.</p>
+    <p class="alerta" id="ce-aviso" hidden></p>
+    <button class="btn principal" type="button" id="ce-salvar">Salvar</button>
+    <button class="btn mais peq perigo" type="button" id="ce-excluir">Excluir peça</button>
   </div>
 </div>
 

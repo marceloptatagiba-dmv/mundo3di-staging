@@ -566,6 +566,70 @@
     igual('planilha: não muda a lista original', csvRegs[0].n + ',' + csvRegs[1].n, '2,1');
     igual('planilha: aceita registro com 2.000 linhas', D.gerarCSV(muitosR.slice(0, 2000).map(function (r) { return D.lerRegistro(r); }), hojeH).split('\r\n').length, 2002);
 
+    /* ---- v4 · etapa 4: catálogo de peças recorrentes (dados.js) ---- */
+    var entMesa = { peso: 96, tempoMin: 250, qtd: 8, extras: 0.5, margem: 100, materialId: 'pla', materialNome: 'PLA' };
+    var catQuando = new Date(2026, 10, 14, 10, 0);
+    var s1 = D.salvarPeca([], { nome: '  Suporte   de celular ', descricao: 'Suporte para celular', entrada: entMesa, precoRef: 6.24, quando: catQuando });
+    igual('catálogo: salvar peça nova', s1.ok + '|' + s1.substituiu + '|' + s1.lista.length + '|' + s1.peca.nome + '|' + s1.peca.usos + '|' + s1.peca.precoRef, 'true|false|1|Suporte de celular|0|6.24');
+    igual('catálogo: peça guarda a entrada da mesa e a data da referência', JSON.stringify(s1.peca.entrada) + '|' + s1.peca.precoRefEm, JSON.stringify(D.montarEntrada(entMesa)) + '|' + catQuando.toISOString());
+    igual('catálogo: precoRefEm vindo do histórico é mantido', D.salvarPeca([], { nome: 'A', entrada: entMesa, precoRef: 1, precoRefEm: '2026-10-28T12:00:00.000Z' }).peca.precoRefEm, '2026-10-28T12:00:00.000Z');
+    igual('catálogo: nome vazio ou sem entrada não salva', D.salvarPeca([], { nome: '  ', entrada: entMesa }).erro + '|' + D.salvarPeca([], { nome: 'A' }).erro, 'invalido|invalido');
+    igual('catálogo: nome cortado em 40 e descrição em 120', D.salvarPeca([], { nome: new Array(60).join('a'), descricao: new Array(200).join('b'), entrada: entMesa }).peca.nome.length + '|' + D.salvarPeca([], { nome: 'A', descricao: new Array(200).join('b'), entrada: entMesa }).peca.descricao.length, '40|120');
+    var ex1 = D.salvarPeca(s1.lista, { nome: 'SUPORTE DE CELULAR', entrada: entMesa, precoRef: 7 });
+    igual('catálogo: nome igual (sem diferenciar maiúscula) pergunta antes de substituir', ex1.ok + '|' + ex1.erro + '|' + ex1.existente.id, 'false|existe|' + s1.peca.id);
+    igual('catálogo: nome igual sem acento também conta', D.pecaComNome(D.salvarPeca([], { nome: 'Pingente Coração', entrada: entMesa }).lista, 'pingente coracao') !== null, true);
+    var usada = D.registrarUsoPeca(s1.lista, s1.peca.id, 6.3, new Date(2026, 10, 20, 9, 0));
+    var sub = D.salvarPeca(usada, { nome: 'Suporte de celular', descricao: 'Novo', entrada: { peso: 50, tempoMin: 100, qtd: 1, margem: 80 }, precoRef: 9 }, true);
+    igual('catálogo: substituir mantém o id e os usos (orçamentos já enviados continuam ligados)', sub.ok + '|' + sub.substituiu + '|' + sub.lista.length + '|' + (sub.peca.id === s1.peca.id) + '|' + sub.peca.usos + '|' + sub.peca.entrada.peso + '|' + sub.peca.precoRef, 'true|true|1|true|1|50|9');
+    var cheio = []; for (var ci = 0; ci < 100; ci++) cheio.push({ id: 'p' + ci, nome: 'Peça ' + ci, entrada: entMesa });
+    igual('catálogo: no máximo 100 peças', D.lerCatalogo(cheio.concat([{ id: 'x', nome: 'Extra', entrada: entMesa }])).length + '|' + D.salvarPeca(D.lerCatalogo(cheio), { nome: 'Nova', entrada: entMesa }).erro, '100|cheio');
+    igual('catálogo: com 100 peças ainda dá para substituir uma', D.salvarPeca(D.lerCatalogo(cheio), { nome: 'Peça 3', entrada: entMesa }, true).ok, true);
+    igual('catálogo: leitura descarta peça inválida e id repetido', D.lerCatalogo([null, 5, { id: '', nome: 'a', entrada: entMesa }, { id: 'a', nome: '', entrada: entMesa }, { id: 'a', nome: 'ok', entrada: null },
+      { id: 'b', nome: 'B', entrada: entMesa }, { id: 'b', nome: 'B2', entrada: entMesa }]).map(function (p) { return p.nome; }).join(','), 'B');
+    igual('catálogo: não é lista = vazio', D.lerCatalogo(null).length + '|' + D.lerCatalogo({}).length + '|' + D.lerCatalogo('x').length, '0|0|0');
+    igual('catálogo: dados esquisitos viram padrão', JSON.stringify(D.lerPeca({ id: 'a', nome: 'A', entrada: entMesa, precoRef: 'x', usos: -3, usadoEm: 'lixo', precoRefEm: 5 })).indexOf('"usos":0') > -1 && D.lerPeca({ id: 'a', nome: 'A', entrada: entMesa, usadoEm: 'lixo' }).usadoEm === '', true);
+    igual('catálogo: usar a peça atualiza referência, usos e último uso', usada[0].precoRef + '|' + usada[0].usos + '|' + usada[0].usadoEm + '|' + usada[0].precoRefEm, '6.3|1|' + new Date(2026, 10, 20, 9, 0).toISOString() + '|' + new Date(2026, 10, 20, 9, 0).toISOString());
+    igual('catálogo: usar peça que não existe não muda nada', JSON.stringify(D.registrarUsoPeca(s1.lista, 'nao-existe', 5, catQuando)), JSON.stringify(s1.lista));
+    var edit = D.editarPeca(s1.lista, s1.peca.id, { nome: 'Suporte novo', descricao: 'Desc' });
+    igual('catálogo: editar nome e descrição (dados técnicos ficam)', edit.ok + '|' + edit.lista[0].nome + '|' + edit.lista[0].descricao + '|' + edit.lista[0].entrada.peso + '|' + edit.lista[0].id, 'true|Suporte novo|Desc|96|' + s1.peca.id);
+    var dois2 = D.salvarPeca(s1.lista, { nome: 'Chaveiro', entrada: entMesa }).lista;
+    igual('catálogo: editar para o nome de outra peça não deixa; o próprio nome pode', D.editarPeca(dois2, dois2[1].id, { nome: 'suporte de celular' }).erro + '|' + D.editarPeca(dois2, dois2[1].id, { nome: 'CHAVEIRO' }).ok, 'existe|true');
+    igual('catálogo: editar nome vazio ou peça que não existe', D.editarPeca(dois2, dois2[0].id, { nome: ' ' }).erro + '|' + D.editarPeca(dois2, 'zzz', { nome: 'A' }).erro, 'invalido|naoExiste');
+    igual('catálogo: excluir só tira a peça pedida', D.excluirPeca(dois2, dois2[0].id).map(function (p) { return p.nome; }).join(',') + '|' + D.excluirPeca(dois2, 'zzz').length, 'Chaveiro|2');
+    var ord = D.lerCatalogo([
+      { id: 'a', nome: 'Antiga', entrada: entMesa, precoRefEm: '2026-10-01T10:00:00.000Z', usadoEm: '2026-11-01T10:00:00.000Z' },
+      { id: 'b', nome: 'Nunca usada', entrada: entMesa, precoRefEm: '2026-11-10T10:00:00.000Z' },
+      { id: 'c', nome: 'Usada ontem', entrada: entMesa, precoRefEm: '2026-09-01T10:00:00.000Z', usadoEm: '2026-11-13T10:00:00.000Z' }]);
+    igual('catálogo: ordem = usadas por último (sem uso, pela data de quando foi salva)', D.ordenarCatalogo(ord).map(function (p) { return p.id; }).join(','), 'c,b,a');
+    igual('catálogo: busca por nome ou descrição, sem diferenciar acento', D.filtrarCatalogo(D.lerCatalogo([{ id: 'a', nome: 'Pingente Coração', descricao: 'Lembrança', entrada: entMesa }, { id: 'b', nome: 'Chaveiro', entrada: entMesa }]), 'CORAÇÃO').map(function (p) { return p.id; }).join(',') + '|'
+      + D.filtrarCatalogo(D.lerCatalogo([{ id: 'a', nome: 'Pingente', descricao: 'Lembrança', entrada: entMesa }]), 'lembranca').length + '|' + D.filtrarCatalogo(ord, '').length + '|' + D.filtrarCatalogo(ord, 'xyz').length, 'a|1|3|0');
+    igual('catálogo: descrição vazia usa o nome', D.descricaoDaPeca({ nome: 'Suporte', descricao: '' }) + '|' + D.descricaoDaPeca({ nome: 'Suporte', descricao: 'Para celular' }) + '|' + D.descricaoDaPeca(null), 'Suporte|Para celular|');
+
+    // pedido: peso e tempo proporcionais; o valor por peça não muda
+    var ped = D.entradaDoPedido(entMesa, 10);
+    igual('pedido: peso e tempo proporcionais às peças da mesa', ped.peso + '|' + ped.tempoMin + '|' + ped.qtd + '|' + ped.extras + '|' + ped.margem, '120|312.5|10|0.5|100');
+    igual('pedido: a entrada original não muda', JSON.stringify(entMesa), JSON.stringify({ peso: 96, tempoMin: 250, qtd: 8, extras: 0.5, margem: 100, materialId: 'pla', materialNome: 'PLA' }));
+    igual('pedido: quantidade inválida = 1 peça', D.entradaDoPedido(entMesa, 0).qtd + '|' + D.entradaDoPedido(entMesa, 'x').qtd + '|' + D.entradaDoPedido(entMesa, 99999).qtd, '1|1|9999');
+    function precoPedido(e) { return C.calcular({ peso: e.peso, tempo: e.tempoMin, margemPct: e.margem, qtd: e.qtd, extrasPeca: e.extras, precoKg: 150, valorHora: 2.25, perdaPct: 5, minimo: 0 }); }
+    igual('pedido: valor por peça igual ao da mesa (8, 10, 1, 16, 50 peças)', [8, 10, 1, 16, 50].map(function (q) { return C.moeda(precoPedido(D.entradaDoPedido(entMesa, q)).valorUnitario); }).join('|'),
+      new Array(6).join(C.moeda(precoPedido(entMesa).valorUnitario) + '|').slice(0, -1));
+    igual('pedido: total = valor por peça × quantidade', precoPedido(D.entradaDoPedido(entMesa, 10)).valorCobrar.toFixed(6), (precoPedido(entMesa).valorUnitario * 10).toFixed(6));
+    var entMulti = { peso: 30, tempoMin: 60, qtd: 2, extras: 0, margem: 100, materialId: 'pla', materialNome: 'PLA', cores: [{ materialId: 'pla', nome: 'PLA', gramas: 20 }, { materialId: 'petg', nome: 'PETG', gramas: 10 }], purgaG: 4 };
+    var pedM = D.entradaDoPedido(entMulti, 6);
+    igual('pedido: multicor escala gramas de cada cor e a purga', pedM.cores.map(function (c) { return c.gramas; }).join(',') + '|' + pedM.purgaG + '|' + pedM.qtd + '|' + pedM.tempoMin, '60,30|12|6|180');
+    igual('pedido: atalhos 1, uma mesa, duas mesas e 50 (sem repetir)', D.atalhosPedido(entMesa).join(',') + '|' + D.atalhosPedido({ peso: 1, tempoMin: 1, qtd: 1 }).join(',') + '|' + D.atalhosPedido({ peso: 1, tempoMin: 1, qtd: 25 }).join(',') + '|' + D.atalhosPedido({ peso: 1, tempoMin: 1, qtd: 50 }).join(','), '1,8,16,50|1,2,50|1,25,50|1,50,100');
+    igual('catálogo: diferença para o último envio', ['sobe', 'igual', 'desce'].join() === [D.compararPreco(6.30, 6.24), D.compararPreco(6.24, 6.24), D.compararPreco(6.20, 6.24)].map(function (x) { return x.tipo; }).join() ? D.compararPreco(6.30, 6.24).diff + '|' + D.compararPreco(6.20, 6.24).diff + '|' + D.compararPreco(6.2400001, 6.24).tipo : 'tipos errados', '0.06|0.04|igual');
+    igual('catálogo: resumo da mesa', D.descreverEntrada(entMesa) + ' / ' + D.descreverEntrada({ peso: 48, tempoMin: 155, qtd: 1, margem: 100, materialNome: 'PLA' }) + ' / ' + D.descreverEntrada(entMulti) + ' / ' + D.descreverEntrada({ peso: 12.5, tempoMin: 45, qtd: 1, margem: 70 }),
+      'Mesa de 8 peças · 96 g de PLA · 4h10 · margem 100% / 1 peça · 48 g de PLA · 2h35 · margem 100% / Mesa de 2 peças · 30 g em 2 cores · 1h00 · margem 100% / 1 peça · 12,5 g · 45 min · margem 70%');
+
+    // registro ligado à peça e backup
+    var regCat = D.novoRegistro(r1, { numero: 20, formato: 'imagem', quando: em(0, 11), entrada: entMesa, catalogoId: s1.peca.id });
+    igual('registro v4: com peça do catálogo grava catalogoId e a leitura mantém', regCat.catalogoId + '|' + D.lerRegistro(JSON.parse(JSON.stringify(regCat))).catalogoId, s1.peca.id + '|' + s1.peca.id);
+    var bkCat = D.lerBackup(JSON.stringify(D.montarBackup({ config: cfgBackup, contador: 1, registros: [regCat], catalogo: s1.lista }, {})));
+    igual('backup: catálogo e catalogoId fazem a ida e volta', bkCat.ok + '|' + D.lerCatalogo(bkCat.backup.dados.catalogo)[0].nome + '|' + bkCat.backup.dados.registros[0].catalogoId + '|' + D.resumoBackup(bkCat.backup).pecas, 'true|Suporte de celular|' + s1.peca.id + '|1');
+    var restCat = D.restaurarDados({ config: cfgBackup, contador: 1, registros: [], catalogo: dois2 }, bkCat.backup.dados);
+    igual('restaurar: o catálogo do backup substitui o do aparelho; desfazer devolve o antigo', restCat.catalogo.length + '|' + D.desfazerRestauracao(restCat, { em: catQuando.toISOString(), dados: { config: cfgBackup, contador: 1, registros: [], catalogo: dois2 } }).catalogo.length, '1|2');
+
     return resultados;
   }
 

@@ -507,6 +507,146 @@
     return '﻿' + linhas.join('\r\n') + '\r\n';
   }
 
+  /* ---------- catálogo de peças recorrentes ---------- */
+
+  /*
+   * Peça do catálogo: { id, nome (40), descricao (120; vazia = nome), entrada (a da mesa), precoRef (valor por peça do último envio
+   * ou de quando foi salva), precoRefEm (data/hora ISO), usos, usadoEm (data/hora ISO) }.
+   * O preço de hoje NÃO fica guardado: é recalculado pela tela com os custos de hoje.
+   */
+  function lerPeca(x) {
+    if (!objeto(x)) return null;
+    var id = limparTexto(x.id, 40), nome = limparTexto(x.nome, 40), entrada = montarEntrada(x.entrada);
+    if (!id || !nome || !entrada) return null;
+    var p = { id: id, nome: nome, descricao: limparTexto(x.descricao, 120), entrada: entrada,
+      precoRef: c2(n0(x.precoRef)), precoRefEm: dataValida(x.precoRefEm) ? x.precoRefEm : '',
+      usos: Math.floor(n0(x.usos)), usadoEm: dataValida(x.usadoEm) ? x.usadoEm : '' };
+    return p;
+  }
+  /* Lê o catálogo salvo (de qualquer versão): descarta o inválido e o id repetido; no máximo MAX_CATALOGO peças. */
+  function lerCatalogo(bruto) {
+    if (!Array.isArray(bruto)) return [];
+    var vistos = {}, saida = [];
+    bruto.forEach(function (x) {
+      var p = lerPeca(x);
+      if (p && !vistos[p.id] && saida.length < MAX_CATALOGO) { vistos[p.id] = true; saida.push(p); }
+    });
+    return saida;
+  }
+  var contadorId = 0;
+  function novoIdPeca(quando) {
+    contadorId++;
+    return 'p' + (quando instanceof Date ? quando : new Date()).getTime().toString(36) + contadorId.toString(36) + Math.floor(Math.random() * 1296).toString(36);
+  }
+  function acharPeca(catalogo, id) {
+    var l = Array.isArray(catalogo) ? catalogo : [];
+    for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i];
+    return null;
+  }
+  /* Peça com este nome (sem diferenciar maiúscula nem acento), ou null */
+  function pecaComNome(catalogo, nome) {
+    var alvo = normalizarBusca(limparTexto(nome, 40)), l = Array.isArray(catalogo) ? catalogo : [];
+    if (!alvo) return null;
+    for (var i = 0; i < l.length; i++) if (normalizarBusca(l[i].nome) === alvo) return l[i];
+    return null;
+  }
+  /*
+   * Salva uma peça. o: { nome, descricao, entrada, precoRef, precoRefEm (ISO; sem ele, agora), quando (Date) }. Nome igual ao de uma peça existente SUBSTITUI a dela
+   * (mantém o id, para os orçamentos já enviados continuarem ligados, e soma os usos), mas só com substituir === true;
+   * sem isso devolve { ok:false, erro:'existe', existente }. Catálogo cheio -> { ok:false, erro:'cheio' }.
+   * Devolve { ok:true, lista, peca, substituiu }.
+   */
+  function salvarPeca(catalogo, o, substituir) {
+    var lista = lerCatalogo(catalogo), quando = (o && o.quando instanceof Date ? o.quando : new Date()).toISOString();
+    var nome = limparTexto(o && o.nome, 40), entrada = montarEntrada(o && o.entrada);
+    if (!nome || !entrada) return { ok: false, erro: 'invalido' };
+    var igual = pecaComNome(lista, nome);
+    if (igual && !substituir) return { ok: false, erro: 'existe', existente: igual };
+    if (!igual && lista.length >= MAX_CATALOGO) return { ok: false, erro: 'cheio' };
+    var peca = { id: igual ? igual.id : novoIdPeca(o && o.quando), nome: nome, descricao: limparTexto(o && o.descricao, 120), entrada: entrada,
+      precoRef: c2(n0(o && o.precoRef)), precoRefEm: dataValida(o && o.precoRefEm) ? o.precoRefEm : quando, usos: igual ? igual.usos : 0, usadoEm: igual ? igual.usadoEm : '' };
+    var nova = igual ? lista.map(function (p) { return p.id === igual.id ? peca : p; }) : lista.concat([peca]);
+    return { ok: true, lista: nova, peca: peca, substituiu: !!igual };
+  }
+  /* Edita nome e descrição (os dados técnicos não mudam aqui). Nome vazio ou de outra peça = não muda ({ ok:false, erro }). */
+  function editarPeca(catalogo, id, m) {
+    var lista = lerCatalogo(catalogo), alvo = acharPeca(lista, id);
+    if (!alvo) return { ok: false, erro: 'naoExiste' };
+    var nome = limparTexto(m && m.nome, 40);
+    if (!nome) return { ok: false, erro: 'invalido' };
+    var outra = pecaComNome(lista, nome);
+    if (outra && outra.id !== id) return { ok: false, erro: 'existe', existente: outra };
+    return { ok: true, lista: lista.map(function (p) {
+      return p.id === id ? Object.assign({}, p, { nome: nome, descricao: limparTexto(m && m.descricao, 120) }) : p;
+    }) };
+  }
+  function excluirPeca(catalogo, id) { return lerCatalogo(catalogo).filter(function (p) { return p.id !== id; }); }
+  /* Depois de um envio: o valor por peça enviado vira a referência e a peça sobe de uso. Id que não existe (peça excluída) não muda nada. */
+  function registrarUsoPeca(catalogo, id, valorPeca, quando) {
+    var q = (quando instanceof Date ? quando : new Date()).toISOString();
+    return lerCatalogo(catalogo).map(function (p) {
+      return p.id === id ? Object.assign({}, p, { precoRef: c2(n0(valorPeca)), precoRefEm: q, usos: p.usos + 1, usadoEm: q }) : p;
+    });
+  }
+  /* Ordem da lista: usadas por último primeiro; sem uso, pela data em que foram salvas */
+  function ordenarCatalogo(catalogo) {
+    function quando(p) { return p.usadoEm || p.precoRefEm || ''; }
+    return lerCatalogo(catalogo).map(function (p, i) { return { p: p, i: i }; }).sort(function (a, b) {
+      var qa = quando(a.p), qb = quando(b.p);
+      return qa === qb ? b.i - a.i : (qa < qb ? 1 : -1);
+    }).map(function (x) { return x.p; });
+  }
+  function filtrarCatalogo(catalogo, busca) {
+    var b = normalizarBusca(busca), l = ordenarCatalogo(catalogo);
+    if (!b) return l;
+    return l.filter(function (p) { return normalizarBusca(p.nome + ' ' + p.descricao).indexOf(b) !== -1; });
+  }
+  /* Texto que vai para o campo "Descrição da peça" do envio: a descrição da peça, ou o nome se ela estiver vazia */
+  function descricaoDaPeca(p) { return p ? (p.descricao || p.nome) : ''; }
+
+  /*
+   * Pedido de N peças: peso, tempo (e, no multicolor, gramas de cada cor e purga) proporcionais à mesa:
+   * peso = peso da mesa ÷ peças na mesa × N, e peças = N. Extras e margem não mudam. Valores exatos (sem arredondar).
+   * Devolve uma entrada nova; a original não muda. Quantidade inválida = 1.
+   */
+  function entradaDoPedido(entrada, qtd) {
+    var e = montarEntrada(entrada);
+    if (!e) return null;
+    var n = Math.min(9999, Math.max(1, Math.floor(Number(qtd)) || 1)), f = n / e.qtd;
+    var s = { peso: e.peso * f, tempoMin: e.tempoMin * f, qtd: n, extras: e.extras, margem: e.margem, materialId: e.materialId, materialNome: e.materialNome };
+    if (e.cores) {
+      s.cores = e.cores.map(function (c) { return { materialId: c.materialId, nome: c.nome, gramas: c.gramas * f }; });
+      s.purgaG = e.purgaG * f;
+    }
+    return s;
+  }
+  /* Quantidades dos atalhos do pedido: 1 peça, uma mesa, duas mesas e 50 (sem repetir) */
+  function atalhosPedido(entrada) {
+    var e = montarEntrada(entrada), mesa = e ? e.qtd : 1, saida = [];
+    [1, mesa, mesa * 2, 50].forEach(function (n) { if (n <= 9999 && saida.indexOf(n) === -1) saida.push(n); });
+    return saida.sort(function (a, b) { return a - b; });
+  }
+  /* Valor de hoje x valor do último envio, em centavos: { tipo: 'sobe'|'desce'|'igual', diff } (diff sempre positivo) */
+  function compararPreco(hoje, ref) {
+    var d = Math.round((n0(hoje) - n0(ref)) * 100);
+    return { tipo: d > 0 ? 'sobe' : d < 0 ? 'desce' : 'igual', diff: Math.abs(d) / 100 };
+  }
+  /* "Mesa de 8 peças · 96 g de PLA · 4h10 · margem 100%" (1 peça: "1 peça · 48 g de PLA · …"; multicor: "… g em 2 cores") */
+  function descreverEntrada(entrada) {
+    var e = montarEntrada(entrada);
+    if (!e) return '';
+    var partes = [e.qtd > 1 ? 'Mesa de ' + e.qtd + ' peças' : '1 peça'];
+    function g(n) { return textoCampo(Math.round(n * 100) / 100) || '0'; }
+    if (e.cores && e.cores.length) {
+      var gs = e.cores.filter(function (c) { return c.gramas > 0; });
+      partes.push(g(gs.reduce(function (s, c) { return s + c.gramas; }, 0)) + ' g em ' + gs.length + (gs.length === 1 ? ' cor' : ' cores'));
+    } else partes.push(g(e.peso) + ' g' + (e.materialNome ? ' de ' + e.materialNome : ''));
+    var t = textoTempo(e.tempoMin);
+    if (t) partes.push(t.indexOf('h') === -1 ? t + ' min' : t);
+    partes.push('margem ' + (textoCampo(e.margem) || '0') + '%');
+    return partes.join(' · ');
+  }
+
   var Dados = {
     MAX_REGISTROS: MAX_REGISTROS, SITUACOES: SITUACOES, ROTULOS_SITUACAO: ROTULOS_SITUACAO, LIMITE_LEMBRETE_BACKUP: LIMITE_LEMBRETE_BACKUP,
     limparTexto: limparTexto, dataISO: dataISO, somarDias: somarDias, textoCampo: textoCampo, textoTempo: textoTempo,
@@ -521,7 +661,11 @@
     montarDados: montarDados, montarBackup: montarBackup, nomeArquivoBackup: nomeArquivoBackup, nomeArquivoCSV: nomeArquivoCSV,
     lerBackup: lerBackup, resumoBackup: resumoBackup, descreverOrcamentos: descreverOrcamentos, juntarRegistros: juntarRegistros,
     restaurarDados: restaurarDados, desfazerRestauracao: desfazerRestauracao, descreverBackup: descreverBackup,
-    textoLembreteBackup: textoLembreteBackup, gerarCSV: gerarCSV, dataBR: dataBR
+    textoLembreteBackup: textoLembreteBackup, gerarCSV: gerarCSV, dataBR: dataBR,
+    MAX_CATALOGO: MAX_CATALOGO, lerPeca: lerPeca, lerCatalogo: lerCatalogo, acharPeca: acharPeca, pecaComNome: pecaComNome, salvarPeca: salvarPeca,
+    editarPeca: editarPeca, excluirPeca: excluirPeca, registrarUsoPeca: registrarUsoPeca, ordenarCatalogo: ordenarCatalogo,
+    filtrarCatalogo: filtrarCatalogo, descricaoDaPeca: descricaoDaPeca, entradaDoPedido: entradaDoPedido, atalhosPedido: atalhosPedido,
+    compararPreco: compararPreco, descreverEntrada: descreverEntrada
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = Dados; }
   root.Dados = Dados;

@@ -34,7 +34,7 @@ Padrões das configurações: PLA a R$ 150,00 o rolo de 1000 g, hora R$ 2,25/h, 
 |---|---|
 | `index.html` | Telas e visual |
 | `calc.js` | Regras de cálculo, leitura de tempo e texto do orçamento |
-| `dados.js` | Registro dos envios, histórico (busca, período, resumo), situação, "usar de novo", backup/restauração e planilha (CSV) |
+| `dados.js` | Registro dos envios, histórico (busca, período, resumo), situação, "usar de novo", catálogo de peças, backup/restauração e planilha (CSV) |
 | `orcamento-img.js` | Desenha o orçamento em imagem (JPG) com logo, em canvas, sem internet; reduz o logo enviado pelo cliente |
 | `app.js` | Funcionamento das telas, configurações salvas, botão copiar, envio do orçamento (texto ou imagem), numeração e registro dos envios |
 | `config-ambiente.js` | Nome do ambiente (produção ou teste), prefixo do cache e chave das configurações salvas |
@@ -75,6 +75,12 @@ O que muda entre os dois fica só em `config-ambiente.js`, `manifest.webmanifest
 - **Android:** abra no **Chrome** → toque em **Instalar** no aviso do app, ou menu ⋮ → **Instalar app**.
 
 Depois de instalado, abra uma vez com internet. A partir daí funciona em modo avião.
+
+## Catálogo de peças
+- Link **Catálogo** ao lado de "Dados da peça". Guarda até 100 peças com os dados da mesa (peso, tempo, peças na mesa, extras, margem, filamento ou cores). **O preço não fica congelado:** é recalculado com os custos de hoje e comparado com o último envio.
+- **Salvar:** pela tela do Catálogo ("Salvar o orçamento atual") ou pelo detalhe de um orçamento do Histórico. Nome igual ao de outra peça pergunta antes de substituir.
+- **Pedido:** toque numa peça, escolha a quantidade (peso e tempo ficam proporcionais; o valor por peça é o da mesa) e envie ou abra na calculadora. O orçamento enviado grava a peça (`catalogoId`) e atualiza o último preço.
+- O catálogo entra no backup e na restauração.
 
 ## Backup e planilha
 
