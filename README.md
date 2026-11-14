@@ -78,8 +78,8 @@ Depois de instalado, abra uma vez com internet. A partir daí funciona em modo a
 ## Atualizar o app
 
 1. Altere os arquivos.
-2. Em `config-ambiente.js` do ambiente, aumente a `versaoCache` (`v2` → `v3`). Sem isso os celulares continuam com a versão antiga.
-3. Publique de novo. Os celulares recebem a atualização na próxima vez que abrirem o app com internet (às vezes é preciso fechar e abrir de novo).
+2. Em `config-ambiente.js` do ambiente, aumente a `versao` no formato **MAJOR.MINOR.PATCH**. Sem isso os celulares continuam com a versão antiga. No staging a versão leva o sufixo `-teste.N` (`0.4.0-teste.1`, `0.4.0-teste.2`…; o N sobe a cada publicação). Na produção vale o mesmo número sem o sufixo (`0.4.0`). MINOR sobe a cada lote do backlog, PATCH a cada correção (regras completas no plano, v4 item 5). O cache offline passa a se chamar `<prefixo>-v<versao>`.
+3. Publique de novo. Os celulares baixam a versão nova em segundo plano. Com o app aberto aparece a faixa **"Versão X pronta · Atualizar"** (nunca recarrega sozinho; os campos digitados voltam depois de atualizar). Se o app foi fechado e aberto, ele já abre na versão nova e mostra uma vez "Atualizado para a X". A versão em uso fica no cabeçalho de **Configurações**.
 
 ## Testar no computador
 

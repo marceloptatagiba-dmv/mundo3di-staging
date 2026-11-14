@@ -58,6 +58,7 @@
   /* ---------- Orçamento ---------- */
   var ePeso = $('peso'), eTempo = $('tempo'), eMargem = $('margem'), eQtd = $('qtd'), eExtras = $('extras');
   var eMaterial = $('material');
+  var configInicial = '';   // foto das configurações ao abrir a tela (para saber se há alteração não salva)
 
   /* Peça multicor: só em memória (não grava no aparelho). cores = [{ id do filamento, g texto }] */
   var MULTI = '__multicor';
@@ -603,20 +604,25 @@
     selecionarAoFocar(el);
   });
 
-  $('form-config').addEventListener('submit', function (ev) {
-    ev.preventDefault();
+  /* Lê o que está na tela de configurações (sem gravar) */
+  function lerConfigTela() {
     var padrao = null;
     var materiais = linhas().map(function (d) {
       if (d.querySelector('.m-padrao').checked) padrao = d.dataset.id;
       return lerLinha(d);
     });
     var mats = C.lerMateriais({ materiais: materiais, materialPadrao: padrao });
-    config = {
+    var cfg = {
       valorHora: C.lerNumero(cHora.value), perdaPct: C.lerNumero(cPerda.value), minimo: C.lerNumero(cMin.value),
       materiais: mats.materiais, materialPadrao: mats.materialPadrao, mostrarMaterial: cMostrar.checked,
       modoHora: modoEdicao, impressora: lerImpressoraTela(), negocio: lerNegocioTela(), arredondamento: arredEdicao
     };
-    config.precoKg = C.precoKgMaterial(materialPorId(config, config.materialPadrao)); // compatibilidade com a v2
+    cfg.precoKg = C.precoKgMaterial(materialPorId(cfg, cfg.materialPadrao)); // compatibilidade com a v2
+    return cfg;
+  }
+  /* Grava as configurações da tela e atualiza o orçamento. Retorna false se o aparelho não deixou gravar. */
+  function gravarConfigTela() {
+    config = lerConfigTela();
     var ok = salvarConfig(config);
     if (logoPendente !== undefined) {
       try {
@@ -626,6 +632,11 @@
     }
     montarSeletor();
     atualizar();
+    return ok;
+  }
+  $('form-config').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var ok = gravarConfigTela();
     sairConfig();
     avisar(ok ? 'Configurações salvas' : 'Salvo só até fechar o app');
   });
@@ -640,7 +651,8 @@
     var cfg = tela === 'config';
     $('tela-calc').hidden = cfg;
     $('tela-config').hidden = !cfg;
-    if (cfg) preencherConfig(config);
+    if (cfg) { preencherConfig(config); configInicial = JSON.stringify(lerConfigTela()); }
+    desenharVersao();
     window.scrollTo(0, 0);
   }
   function rota() {
@@ -685,13 +697,126 @@
   });
   window.addEventListener('appinstalled', function () { $('instalar').hidden = true; });
 
+  /* ---------- Versão e aviso de nova versão ---------- */
+  /* Novidades por MAJOR.MINOR (o sufixo -teste.N do staging é ignorado na busca). */
+  var NOVIDADES = { '0.4': 'histórico, backup e catálogo' };
+  var CHAVE_VISTA = CHAVE + '-versao-vista';
+  var CHAVE_RETOMAR = CHAVE + '-retomar';
+  var versaoEmUso = C.lerVersao(AMB.versao) ? AMB.versao : '';   // lida de config-ambiente.js (a que esta tela carregou)
+  var versaoNova = null;      // null = nada pendente · texto = versão pronta ('' = não deu para saber o número)
+  var faixaFechada = false;   // o × esconde a faixa até a próxima abertura
+
+  function desenharVersao() {
+    var pendente = versaoNova !== null;
+    var link = $('versao-atualizar');
+    $('versao-uso').textContent = pendente ? 'versão ' + versaoEmUso + ' ·'
+      : 'Orçamento 3DI' + (versaoEmUso ? ' · versão ' + versaoEmUso : '');
+    link.hidden = !pendente;
+    link.textContent = (versaoNova ? versaoNova + ' pronta' : 'Nova versão pronta') + ' — Atualizar';
+    $('faixa-titulo').textContent = versaoNova ? 'Versão ' + versaoNova + ' pronta' : 'Nova versão pronta';
+    /* Em Configurações a faixa fica escondida: a linha do cabeçalho já tem o link */
+    $('faixa-versao').hidden = !pendente || faixaFechada || !$('tela-config').hidden;
+  }
+
+  /* O que foi digitado na tela principal, guardado só até a página recarregar */
+  function estadoParaRetomar() {
+    return { peso: ePeso.value, tempo: eTempo.value, qtd: eQtd.value, extras: eExtras.value, margem: eMargem.value, outra: outraAberta,
+      multicor: multicorAtivo, cores: cores.map(function (c) { return { id: c.id, g: c.g }; }), purga: purgaTxt };
+  }
+  function retomarCampos() {
+    var d = null;
+    try { d = JSON.parse(sessionStorage.getItem(CHAVE_RETOMAR) || 'null'); sessionStorage.removeItem(CHAVE_RETOMAR); } catch (e) { d = null; }
+    if (!d || typeof d !== 'object') return;
+    function txt(v) { return typeof v === 'string' ? v.slice(0, 40) : ''; }
+    ePeso.value = txt(d.peso); eTempo.value = txt(d.tempo); eQtd.value = txt(d.qtd) || '1'; eExtras.value = txt(d.extras);
+    eMargem.value = txt(d.margem) || String(C.PADROES.margemPct);
+    outraAberta = d.outra === true;
+    purgaTxt = txt(d.purga);
+    if (d.multicor === true && Array.isArray(d.cores) && d.cores.length) {
+      multicorAtivo = true;
+      cores = d.cores.slice(0, C.MAX_CORES).map(function (c) { return { id: c && typeof c.id === 'string' ? c.id : null, g: txt(c && c.g) }; });
+    }
+  }
+  function atualizarAgora() {
+    try { sessionStorage.setItem(CHAVE_RETOMAR, JSON.stringify(estadoParaRetomar())); } catch (e) {}
+    history.replaceState(null, '', location.pathname + location.search);   // volta para a tela principal
+    location.reload();
+  }
+  $('faixa-atualizar').addEventListener('click', atualizarAgora);
+  $('faixa-fechar').addEventListener('click', function () { faixaFechada = true; desenharVersao(); });
+
+  /* Link "pronta — Atualizar" em Configurações: com alteração não salva, pergunta antes */
+  var folhaAtualizar = $('folha-atualizar');
+  function configAlterada() { return logoPendente !== undefined || JSON.stringify(lerConfigTela()) !== configInicial; }
+  $('versao-atualizar').addEventListener('click', function () {
+    if (configAlterada()) folhaAtualizar.hidden = false; else atualizarAgora();
+  });
+  $('atualizar-cancelar').addEventListener('click', function () { folhaAtualizar.hidden = true; });
+  $('atualizar-fundo').addEventListener('click', function () { folhaAtualizar.hidden = true; });
+  $('atualizar-salvar').addEventListener('click', function () {
+    if (!gravarConfigTela()) { folhaAtualizar.hidden = true; avisar('Não deu para salvar: não atualizei'); return; }
+    atualizarAgora();
+  });
+
+  /* Pergunta ao service worker novo qual é a versão dele (1 s de espera; sem resposta, a faixa não cita o número) */
+  function perguntarVersao(sw) {
+    return new Promise(function (resolver) {
+      if (!sw || typeof MessageChannel === 'undefined') return resolver('');
+      var canal = new MessageChannel(), fim = false;
+      function terminar(v) { if (fim) return; fim = true; clearTimeout(espera); resolver(v); }
+      var espera = setTimeout(function () { terminar(''); }, 1000);
+      canal.port1.onmessage = function (ev) { var v = ev.data && ev.data.versao; terminar(C.lerVersao(v) ? v : ''); };
+      try { sw.postMessage({ tipo: 'versao' }, [canal.port2]); } catch (e) { terminar(''); }
+    });
+  }
+
+  /* Aviso depois de atualizar: compara a versão em uso com a última vista neste aparelho (primeira abertura não mostra nada) */
+  var timerAvisoVersao;
+  function avisarSeAtualizou() {
+    if (!versaoEmUso) return;
+    var vista = null;
+    try { vista = localStorage.getItem(CHAVE_VISTA); } catch (e) {}
+    var aviso = vista ? C.avisoAtualizado(versaoEmUso, vista, NOVIDADES) : null;
+    if (!vista || C.compararVersoes(versaoEmUso, vista) !== -1) {      // não regrava se a versão em uso for mais antiga que a vista
+      try { localStorage.setItem(CHAVE_VISTA, versaoEmUso); } catch (e) {}
+    }
+    if (!aviso) return;
+    var a = $('aviso-versao');
+    $('aviso-versao-titulo').textContent = aviso.titulo;
+    $('aviso-versao-detalhe').textContent = aviso.detalhe;
+    a.classList.add('ver');
+    clearTimeout(timerAvisoVersao); timerAvisoVersao = setTimeout(function () { a.classList.remove('ver'); }, 5000);
+  }
+
   /* ---------- Funcionamento offline ---------- */
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }); });
+
+    /* Versão nova pronta: o service worker novo assume a página (controllerchange). Na primeira instalação
+       não havia versão controlando a página, então não avisa. Nunca recarrega sozinho. */
+    var jaControlada = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (!jaControlada) { jaControlada = true; return; }
+      perguntarVersao(navigator.serviceWorker.controller).then(function (v) {
+        if (v && v === versaoEmUso) return;      // nada de novo
+        versaoNova = v; faixaFechada = false; desenharVersao();
+      });
+    });
+
+    /* O app instalado no iPhone fica dias em memória: ao voltar para ele, procura atualização (no máximo a cada 30 min) */
+    var ultimaProcura = Date.now();
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState !== 'visible' || Date.now() - ultimaProcura < 30 * 60 * 1000) return;
+      ultimaProcura = Date.now();
+      navigator.serviceWorker.getRegistration().then(function (r) { if (r) r.update(); }).catch(function () {});
+    });
   }
 
   /* ---------- Início ---------- */
+  retomarCampos();            // devolve o que estava na tela antes de "Atualizar" (uma única vez)
   montarSeletor();
+  if (multicorAtivo) aplicarModoMulticor();
   rota();
   atualizar();
+  avisarSeAtualizou();
 })();

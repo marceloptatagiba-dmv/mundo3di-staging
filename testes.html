@@ -81,7 +81,7 @@ pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;bac
     if (detalhe) { var s = document.createElement('small'); s.textContent = detalhe; d.appendChild(s); }
     li.appendChild(i); li.appendChild(d); ul.appendChild(li); return li;
   }
-  $('amb').textContent = 'Ambiente: ' + A.nome + ' · cache ' + A.prefixoCache + '-v…';
+  $('amb').textContent = 'Ambiente: ' + A.nome + ' · cache ' + A.prefixoCache + '-v' + (A.versao || '…');
 
   // 1. cálculo
   var res = window.Testes3DI.executar(window.Calc);
@@ -101,8 +101,22 @@ pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;bac
     online.lastChild.textContent = 'Online agora: ' + (on ? 'sim' : 'não');
   }
   window.addEventListener('online', atualizarOnline); window.addEventListener('offline', atualizarOnline);
+  // versão em uso (a que esta página carregou de config-ambiente.js)
+  var okVersao = !!window.Calc.lerVersao(A.versao);
+  linha(lo, okVersao ? 'ok' : 'falha', 'Versão em uso: ' + (A.versao || '(sem versao em config-ambiente.js)'), okVersao ? 'Formato MAJOR.MINOR.PATCH-teste.N válido' : 'Formato inválido: o service worker não instala');
   if (temSW) {
     var ctl = navigator.serviceWorker.controller;
+    if (ctl) {
+      // pergunta ao service worker que controla a página qual é a versão dele (a mesma pergunta da faixa de nova versão)
+      var canal = new MessageChannel(), liV = linha(lo, 'aviso', 'Versão do service worker: perguntando…');
+      canal.port1.onmessage = function (ev) {
+        var vsw = ev.data && ev.data.versao, igual = vsw === A.versao;
+        liV.firstChild.className = 'sel ' + (igual ? 'ok' : 'aviso'); liV.firstChild.textContent = igual ? ICONE.ok : ICONE.aviso;
+        liV.lastChild.textContent = 'Versão do service worker: ' + vsw + (igual ? '' : ' (diferente da desta página: feche e abra o app para atualizar)');
+      };
+      ctl.postMessage({ tipo: 'versao' }, [canal.port2]);
+      setTimeout(function () { if (/perguntando/.test(liV.lastChild.textContent)) liV.lastChild.textContent = 'Versão do service worker: sem resposta em 1 s (a faixa diria só “Nova versão pronta”)'; }, 1000);
+    }
     linha(lo, ctl ? 'ok' : 'aviso', ctl ? 'Esta página é controlada pelo service worker' : 'Página ainda não controlada pelo service worker', ctl ? ctl.scriptURL : 'Abra o orçamentador uma vez, espere e recarregue esta página.');
     navigator.serviceWorker.getRegistration().then(function (reg) {
       linha(lo, reg && reg.active ? 'ok' : 'aviso', reg && reg.active ? 'Service worker ativo' : 'Service worker ainda não ativo',

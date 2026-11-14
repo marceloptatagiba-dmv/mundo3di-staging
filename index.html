@@ -172,6 +172,24 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 .aviso{position:fixed;left:50%;top:calc(84px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-20px);background:var(--preto);color:#fff;font-size:14px;font-weight:700;
   padding:12px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10}
 .aviso.ver{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---- Versão: linha no cabeçalho de Configurações, faixa de nova versão e aviso depois de atualizar ---- */
+.titulo-config{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.titulo-config h1{flex:none;line-height:1.15}
+.versao-cab{display:flex;align-items:baseline;gap:4px;min-width:0;font-size:12px;font-weight:600;line-height:1.2;color:var(--suave)}
+.versao-cab #versao-uso{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.link-versao{flex-shrink:0;border:0;background:none;padding:12px 0;margin:-12px 0;font-size:12px;font-weight:800;color:var(--verde-texto);text-decoration:underline;white-space:nowrap}
+.link-versao[hidden]{display:none}
+.faixa-versao{position:fixed;left:12px;right:12px;top:calc(78px + env(safe-area-inset-top));z-index:9;max-width:480px;margin:0 auto;background:var(--preto);color:#fff;border-radius:14px;
+  padding:10px 8px 10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px rgba(14,15,16,.25)}
+.faixa-versao[hidden]{display:none}
+.faixa-versao p{margin:0;flex:1;min-width:0;font-size:13px;font-weight:600;line-height:1.35}
+.faixa-versao p strong{display:block;font-size:14px;font-weight:800}
+.faixa-versao .atualizar{height:40px;padding:0 14px;border:0;border-radius:10px;background:var(--verde-claro);color:var(--preto);font-size:14px;font-weight:800;flex-shrink:0}
+.faixa-versao .fechar{color:var(--suave-escuro);margin:0;flex-shrink:0}
+.aviso.versao{width:min(330px,calc(100vw - 24px));text-align:center;line-height:1.35}
+.aviso.versao span{display:block;font-size:12px;font-weight:600;color:var(--suave-escuro)}
+.aviso.versao span:empty{display:none}
 </style>
 </head>
 <body>
@@ -284,7 +302,10 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
       <button class="icone" type="button" id="voltar" aria-label="Voltar">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
       </button>
-      <h1>Configurações</h1>
+      <div class="titulo-config">
+        <h1>Configurações</h1>
+        <div class="versao-cab"><span id="versao-uso"></span><button class="link-versao" type="button" id="versao-atualizar" hidden></button></div>
+      </div>
     </header>
 
     <main>
@@ -468,6 +489,27 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
   </div>
 </div>
 
+<!-- FAIXA: NOVA VERSÃO PRONTA (posição fixa, não empurra nada) -->
+<div class="faixa-versao" id="faixa-versao" role="status" hidden>
+  <p><strong id="faixa-titulo">Nova versão pronta</strong>O que você digitou continua aqui.</p>
+  <button class="atualizar" type="button" id="faixa-atualizar">Atualizar</button>
+  <button class="fechar" type="button" id="faixa-fechar" aria-label="Agora não">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  </button>
+</div>
+
+<!-- PAINEL: ATUALIZAR COM ALTERAÇÃO NÃO SALVA EM CONFIGURAÇÕES -->
+<div class="folha" id="folha-atualizar" hidden>
+  <div class="folha-fundo" id="atualizar-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="atualizar-titulo">
+    <div class="folha-topo"><strong id="atualizar-titulo">Há alterações não salvas</strong></div>
+    <p class="ajuda">Salve antes de atualizar, senão o que você mudou em Configurações se perde.</p>
+    <button class="btn principal" type="button" id="atualizar-salvar">Salvar e atualizar</button>
+    <button class="btn" type="button" id="atualizar-cancelar">Cancelar</button>
+  </div>
+</div>
+
+<div class="aviso versao" id="aviso-versao" role="status"><strong id="aviso-versao-titulo"></strong><span id="aviso-versao-detalhe"></span></div>
 <div class="aviso" id="aviso" role="status"></div>
 
 <script src="calc.js"></script>

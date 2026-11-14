@@ -1,12 +1,16 @@
 /* Orçamentador Mundo 3DI — funcionamento offline.
-   Ao alterar qualquer arquivo do app, aumente a versaoCache em config-ambiente.js (v2 -> v3) para os celulares baixarem a atualização.
-   Prefixo e versão do cache vêm de config-ambiente.js: produção e teste têm os seus e nunca apagam o cache um do outro. */
+   Ao alterar qualquer arquivo do app, aumente a versao em config-ambiente.js (MAJOR.MINOR.PATCH; no staging com -teste.N) para os celulares baixarem a atualização.
+   Prefixo e versão do cache vêm de config-ambiente.js: produção e teste têm os seus e nunca apagam o cache um do outro.
+   Cache = <prefixo>-v<versao> (ex.: calc3di-v0.4.0 · calc3di-teste-v0.4.0-teste.1). */
 importScripts('config-ambiente.js');
 var AMB = self.AMBIENTE_3DI;
-/* Se o navegador entregar uma config-ambiente.js antiga (cache HTTP), aborta: a atualização é tentada de novo na próxima abertura. */
-if (!AMB || !AMB.versaoCache) { throw new Error('config-ambiente.js desatualizado (sem versaoCache)'); }
+/* Se o navegador entregar uma config-ambiente.js antiga (cache HTTP) ou com versão fora do formato, aborta:
+   a atualização é tentada de novo na próxima abertura. */
+if (!AMB || typeof AMB.versao !== 'string' || !/^\d+\.\d+\.\d+(-teste\.\d+)?$/.test(AMB.versao)) {
+  throw new Error('config-ambiente.js desatualizado ou sem versao no formato MAJOR.MINOR.PATCH');
+}
 var PREFIXO = AMB.prefixoCache;
-var VERSAO = PREFIXO + '-' + AMB.versaoCache;
+var VERSAO = PREFIXO + '-v' + AMB.versao;
 var ARQUIVOS = [
   './', 'index.html', 'calc.js', 'orcamento-img.js', 'app.js', 'config-ambiente.js', 'manifest.webmanifest',
   'img/logo-3di.png',
@@ -38,4 +42,12 @@ self.addEventListener('fetch', function (e) {
       });
     })
   );
+});
+
+/* A página pergunta qual versão é a deste service worker (faixa "Versão X pronta"). */
+self.addEventListener('message', function (e) {
+  if (!e.data || e.data.tipo !== 'versao') return;
+  var resposta = { tipo: 'versao', versao: AMB.versao };
+  if (e.ports && e.ports[0]) e.ports[0].postMessage(resposta);
+  else if (e.source) e.source.postMessage(resposta);
 });

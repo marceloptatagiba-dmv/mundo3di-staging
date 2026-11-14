@@ -307,6 +307,25 @@
     igual('telefone: imagem usa formato', C.dadosOrcamento(r1, { negocio: { whatsapp: '2133334444' }, numero: 1 }).whatsapp, '(21) 3333-4444');
     igual('telefone: texto livre (não telefone) fica como está', C.lerNegocio({ whatsapp: 'só pelo Insta' }).whatsapp, 'só pelo Insta');
 
+
+    /* ---- Versão MAJOR.MINOR.PATCH e aviso depois de atualizar ---- */
+    var NOV = { '0.4': 'histórico, backup e catálogo' };
+    function v(t) { var x = C.lerVersao(t); return x ? [x.maior, x.menor, x.patch, x.teste].join('.') : null; }
+    igual('versão: formato válido (produção e staging)', v('0.4.0') + '|' + v('0.4.0-teste.12') + '|' + v('1.10.3'), '0.4.0.|0.4.0.12|1.10.3.');
+    igual('versão: formato inválido', ['', '0.4', '0.4.0.1', 'v0.4.0', '0.4.0-beta.1', '0.4.0-teste', '0.4.0-teste.', ' 0.4.0', null, undefined, 4].map(function (t) { return v(t); }).join('|'), '||||||||||');
+    igual('versão: comparar números (10 > 9, não texto)', C.compararVersoes('0.10.0', '0.9.0') + '|' + C.compararVersoes('0.4.1', '0.4.0') + '|' + C.compararVersoes('0.3.9', '0.4.0') + '|' + C.compararVersoes('1.0.0', '0.99.99'), '1|1|-1|1');
+    igual('versão: 0.4.0-teste.5 vem antes de 0.4.0', C.compararVersoes('0.4.0-teste.5', '0.4.0') + '|' + C.compararVersoes('0.4.0', '0.4.0-teste.5') + '|' + C.compararVersoes('0.4.0-teste.5', '0.3.0'), '-1|1|1');
+    igual('versão: teste.10 depois de teste.9 e iguais', C.compararVersoes('0.4.0-teste.10', '0.4.0-teste.9') + '|' + C.compararVersoes('0.4.0', '0.4.0') + '|' + C.compararVersoes('0.4.0-teste.2', '0.4.0-teste.2'), '1|0|0');
+    igual('versão: comparar com inválida = null', C.compararVersoes('abc', '0.4.0') + '|' + C.compararVersoes('0.4.0', ''), 'null|null');
+    var av = function (a, b) { var r = C.avisoAtualizado(a, b, NOV); return r ? r.titulo + ' / ' + r.detalhe : null; };
+    igual('aviso: novo MINOR mostra a novidade', av('0.4.0', '0.3.0'), 'Atualizado para a 0.4.0 / Novo: histórico, backup e catálogo');
+    igual('aviso: staging ignora o sufixo na busca da novidade', av('0.4.0-teste.1', '0.3.0'), 'Atualizado para a 0.4.0-teste.1 / Novo: histórico, backup e catálogo');
+    igual('aviso: só PATCH = correções', av('0.4.1', '0.4.0'), 'Atualizado para a 0.4.1 (correções) / ');
+    igual('aviso: só mudou o teste.N (staging) = sem novidade nem correções', av('0.4.0-teste.2', '0.4.0-teste.1'), 'Atualizado para a 0.4.0-teste.2 / ');
+    igual('aviso: MINOR sem novidade cadastrada = só o título', av('0.5.0', '0.4.0'), 'Atualizado para a 0.5.0 / ');
+    igual('aviso: mesma versão, mais antiga ou inválida = nada', av('0.4.0', '0.4.0') + '|' + av('0.3.0', '0.4.0') + '|' + av('0.4.0', 'lixo') + '|' + av('', '0.3.0'), 'null|null|null|null');
+    igual('aviso: staging para produção da mesma versão', av('0.4.0', '0.4.0-teste.3'), 'Atualizado para a 0.4.0 / ');
+
     return resultados;
   }
 

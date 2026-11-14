@@ -1,12 +1,13 @@
 /* Configuração do ambiente — TESTE (staging).
    Prefixo e chave próprios: nada aqui mexe no cache nem nas configurações da produção.
+   Toda alteração de arquivo sobe a versao (o cache do app é <prefixo>-v<versao>).
    Também marca visualmente o app (faixa âmbar, subtítulo, título) e pede aos buscadores para não indexar. */
 (function (root) {
   'use strict';
   root.AMBIENTE_3DI = {
     nome: 'teste',
     prefixoCache: 'calc3di-teste',
-    versaoCache: 'v10',
+    versao: '0.4.0-teste.1',   // MAJOR.MINOR.PATCH-teste.N: o N sobe a cada publicação no staging; na produção vale o mesmo número sem o sufixo
     chaveConfig: 'mundo3di-teste-config',
     extraCache: ['testes.html', 'testes-casos.js']
   };
