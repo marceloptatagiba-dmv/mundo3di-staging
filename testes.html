@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Testes — Calculadora 3DI</title>
+<title>Testes — Orçamentador 3DI</title>
 <script src="config-ambiente.js"></script>
 <style>
 :root{--verde:#3D8203;--ok:#2E7D32;--aviso:#B45309;--falha:#B91C1C;--preto:#0E0F10;--fundo:#F4F6F2;--borda:#D5DCCF;--suave:#4A524A}
@@ -28,7 +28,7 @@ pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;bac
 </head>
 <body>
 <main>
-  <h1>Testes da calculadora</h1>
+  <h1>Testes do orçamentador</h1>
   <div class="faixa" id="amb">Carregando…</div>
 
   <section>
@@ -63,7 +63,7 @@ pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;bac
     <button type="button" id="b-limpar">Limpar dados de teste</button>
   </section>
 
-  <a class="btn principal" href="index.html">Abrir a calculadora</a>
+  <a class="btn principal" href="index.html">Abrir o orçamentador</a>
 </main>
 
 <script src="calc.js"></script>
@@ -103,17 +103,17 @@ pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;bac
   window.addEventListener('online', atualizarOnline); window.addEventListener('offline', atualizarOnline);
   if (temSW) {
     var ctl = navigator.serviceWorker.controller;
-    linha(lo, ctl ? 'ok' : 'aviso', ctl ? 'Esta página é controlada pelo service worker' : 'Página ainda não controlada pelo service worker', ctl ? ctl.scriptURL : 'Abra a calculadora uma vez, espere e recarregue esta página.');
+    linha(lo, ctl ? 'ok' : 'aviso', ctl ? 'Esta página é controlada pelo service worker' : 'Página ainda não controlada pelo service worker', ctl ? ctl.scriptURL : 'Abra o orçamentador uma vez, espere e recarregue esta página.');
     navigator.serviceWorker.getRegistration().then(function (reg) {
       linha(lo, reg && reg.active ? 'ok' : 'aviso', reg && reg.active ? 'Service worker ativo' : 'Service worker ainda não ativo',
-        reg ? (reg.waiting ? 'Há uma versão nova aguardando: feche e abra o app.' : 'Sem versão pendente') : 'Nenhum registro: abra a calculadora uma vez.');
+        reg ? (reg.waiting ? 'Há uma versão nova aguardando: feche e abra o app.' : 'Sem versão pendente') : 'Nenhum registro: abra o orçamentador uma vez.');
     });
   }
   if (window.caches) {
     caches.keys().then(function (nomes) {
       var meus = nomes.filter(function (n) { return n.indexOf(A.prefixoCache + '-v') === 0; });
       var outros = nomes.filter(function (n) { return meus.indexOf(n) === -1; });
-      if (!meus.length) { linha(lo, 'aviso', 'Nenhum cache deste ambiente ainda', 'Abra a calculadora uma vez com internet.'); }
+      if (!meus.length) { linha(lo, 'aviso', 'Nenhum cache deste ambiente ainda', 'Abra o orçamentador uma vez com internet.'); }
       meus.forEach(function (n) {
         caches.open(n).then(function (c) { return c.keys(); }).then(function (k) { linha(lo, 'ok', 'Cache ' + n, k.length + ' arquivos guardados'); });
       });

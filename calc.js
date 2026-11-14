@@ -1,4 +1,4 @@
-/* Calculadora Mundo 3DI — regras de cálculo (sem dependência de tela) */
+/* Orçamentador Mundo 3DI — regras de cálculo (sem dependência de tela) */
 (function (root) {
   'use strict';
 

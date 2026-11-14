@@ -1,6 +1,6 @@
-# Calculadora Mundo 3DI
+# Orçamentador Mundo 3DI
 
-App web instalável (PWA) para calcular o preço de peças impressas em 3D. Funciona no iPhone e no Android, sem loja de aplicativos. Depois do primeiro acesso, funciona também sem internet.
+App web instalável (PWA) para montar e enviar orçamentos de peças impressas em 3D. Funciona no iPhone e no Android, sem loja de aplicativos. Depois do primeiro acesso, funciona também sem internet.
 
 ## Como o preço é calculado
 
@@ -50,13 +50,13 @@ O app precisa estar num endereço **https** para poder ser instalado e funcionar
 
 ## Ambientes: teste (staging) e produção
 
-Antes de ir para produção, toda versão passa pelo **staging**, um site de teste separado (repositório `calculadora-3di-staging`, também no GitHub Pages). Os dois ambientes não interferem um no outro: cada um tem o seu cache offline e as suas configurações salvas, e o app de teste se instala com o nome **Calc 3DI (teste)**, faixa âmbar e a página `testes.html` (cálculo, offline, instalação, compartilhamento e teclado de tempo, direto no celular).
+Antes de ir para produção, toda versão passa pelo **staging**, um site de teste separado (repositório `orcamentador-3di-staging`, também no GitHub Pages). Os dois ambientes não interferem um no outro: cada um tem o seu cache offline e as suas configurações salvas, e o app de teste se instala com o nome **Orçamento 3DI (teste)**, faixa âmbar e a página `testes.html` (cálculo, offline, instalação, compartilhamento e teclado de tempo, direto no celular).
 
 O que muda entre os dois fica só em `config-ambiente.js`, `manifest.webmanifest` e `testes.html` (versões de teste em `ambientes/staging/`). O resto dos arquivos é idêntico.
 
 1. Monte o ambiente numa pasta limpa: `bash ambientes/montar.sh staging <pasta>` (ou `producao`).
 2. Publique o conteúdo dessa pasta no repositório do ambiente (staging primeiro).
-3. Teste no celular em `…/calculadora-3di-staging/testes.html` e na calculadora.
+3. Teste no celular em `…/orcamentador-3di-staging/testes.html` e no orçamentador.
 4. Aprovado, monte `producao` e publique no repositório `calculadora-3di`. Nunca copie o `config-ambiente.js` de um ambiente para o outro.
 
 ## Instalar no celular

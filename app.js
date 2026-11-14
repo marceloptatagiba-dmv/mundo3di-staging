@@ -1,4 +1,4 @@
-/* Calculadora Mundo 3DI — interface */
+/* Orçamentador Mundo 3DI — interface */
 (function () {
   'use strict';
 
@@ -31,7 +31,7 @@
   function dinheiro(n) { return C.decimal(n, 2, 2); }     // 150,00
   function fino(n) { return C.decimal(n, 2, 4); }         // 0,0375
 
-  /* ---------- Calculadora ---------- */
+  /* ---------- Orçamento ---------- */
   var ePeso = $('peso'), eTempo = $('tempo'), eMargem = $('margem'), eQtd = $('qtd'), eExtras = $('extras');
   var atalhos = Array.prototype.slice.call(document.querySelectorAll('[data-margem]'));
   var outraAberta = false;
@@ -199,7 +199,7 @@
   if (ios) mostrarConvite('Para instalar: toque em Compartilhar e depois em “Adicionar à Tela de Início”.', false);
   window.addEventListener('beforeinstallprompt', function (ev) {
     ev.preventDefault(); pedidoInstalar = ev;
-    mostrarConvite('Instale a calculadora na tela inicial para usar sem internet.', true);
+    mostrarConvite('Instale o orçamentador na tela inicial para usar sem internet.', true);
   });
   $('instalar-btn').addEventListener('click', function () {
     if (!pedidoInstalar) return;
