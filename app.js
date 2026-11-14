@@ -1056,7 +1056,7 @@
     fecharSheetsHist();
     var calc = calcularEntrada(reg.entrada);
     abrirSalvar({ entrada: reg.entrada, precoRef: reg.valorPeca, precoRefEm: reg.ts, precoHoje: calc.r.valorUnitario, ligar: false },
-      D.limparTexto(reg.descricao, 40));
+      D.limparTexto(reg.descricao, D.NOME_PECA_MAX));
   });
   $('det-excluir').addEventListener('click', function () {
     var reg = regAberto(); if (!reg) return;
@@ -1217,7 +1217,7 @@
   });
   $('cs-salvar').addEventListener('click', function () {
     if (!salvando) return;
-    var nome = D.limparTexto($('cs-nome').value, 40);
+    var nome = D.limparTexto($('cs-nome').value, D.NOME_PECA_MAX);
     if (!nome) { $('cs-aviso').textContent = 'Dê um nome para a peça.'; $('cs-aviso').hidden = false; $('cs-nome').focus(); return; }
     var ex = D.pecaComNome(lerCatalogo(), nome);
     if (ex && salvando.confirmado !== D.normalizarBusca(ex.nome)) {     // primeiro toque: pergunta; segundo toque: substitui
@@ -1300,7 +1300,7 @@
     var p = pedido && D.acharPeca(lerCatalogo(), pedido.id); if (!p) return;
     var aviso = pedidoNaTela(p, qtdPedido());
     fecharPedido(); sairConfig();
-    avisar(aviso || 'Peça “' + p.nome + '” na tela');
+    avisar(aviso || 'Peça “' + (p.nome.length > 30 ? p.nome.slice(0, 29).trim() + '…' : p.nome) + '” na tela');   // o aviso é estreito: nome de até 120 letras vai abreviado
   });
   $('cp-enviar').addEventListener('click', function () {
     var p = pedido && D.acharPeca(lerCatalogo(), pedido.id); if (!p) return;
@@ -1447,7 +1447,7 @@
     eMargem.value = txt(d.margem) || String(C.PADROES.margemPct);
     outraAberta = d.outra === true;
     purgaTxt = txt(d.purga);
-    if (d.vinculo && typeof d.vinculo.id === 'string' && d.vinculo.id) vinculo = { id: txt(d.vinculo.id), nome: txt(d.vinculo.nome) };
+    if (d.vinculo && typeof d.vinculo.id === 'string' && d.vinculo.id) vinculo = { id: txt(d.vinculo.id), nome: D.limparTexto(d.vinculo.nome, D.NOME_PECA_MAX) };
     if (d.multicor === true && Array.isArray(d.cores) && d.cores.length) {
       multicorAtivo = true;
       cores = d.cores.slice(0, C.MAX_CORES).map(function (c) { return { id: c && typeof c.id === 'string' ? c.id : null, g: txt(c && c.g) }; });

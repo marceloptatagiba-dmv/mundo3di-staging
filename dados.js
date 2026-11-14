@@ -10,6 +10,7 @@
   var BACKUP_APP = 'orcamentador-3di';
   var BACKUP_FORMATO = 1;                // número do formato do arquivo: só muda quando o arquivo deixar de ser compatível
   var MAX_CATALOGO = 100;
+  var NOME_PECA_MAX = 120; // nome da peça no catálogo; igual ao da descrição do orçamento (o nome vira a descrição quando ela fica vazia)
   var MAX_ARQUIVO_BACKUP = 20 * 1024 * 1024;   // bytes: acima disso o arquivo não é lido
   var DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   var ISO_DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -510,13 +511,13 @@
   /* ---------- catálogo de peças recorrentes ---------- */
 
   /*
-   * Peça do catálogo: { id, nome (40), descricao (120; vazia = nome), entrada (a da mesa), precoRef (valor por peça do último envio
+   * Peça do catálogo: { id, nome (120), descricao (120; vazia = nome), entrada (a da mesa), precoRef (valor por peça do último envio
    * ou de quando foi salva), precoRefEm (data/hora ISO), usos, usadoEm (data/hora ISO) }.
    * O preço de hoje NÃO fica guardado: é recalculado pela tela com os custos de hoje.
    */
   function lerPeca(x) {
     if (!objeto(x)) return null;
-    var id = limparTexto(x.id, 40), nome = limparTexto(x.nome, 40), entrada = montarEntrada(x.entrada);
+    var id = limparTexto(x.id, 40), nome = limparTexto(x.nome, NOME_PECA_MAX), entrada = montarEntrada(x.entrada);
     if (!id || !nome || !entrada) return null;
     var p = { id: id, nome: nome, descricao: limparTexto(x.descricao, 120), entrada: entrada,
       precoRef: c2(n0(x.precoRef)), precoRefEm: dataValida(x.precoRefEm) ? x.precoRefEm : '',
@@ -545,7 +546,7 @@
   }
   /* Peça com este nome (sem diferenciar maiúscula nem acento), ou null */
   function pecaComNome(catalogo, nome) {
-    var alvo = normalizarBusca(limparTexto(nome, 40)), l = Array.isArray(catalogo) ? catalogo : [];
+    var alvo = normalizarBusca(limparTexto(nome, NOME_PECA_MAX)), l = Array.isArray(catalogo) ? catalogo : [];
     if (!alvo) return null;
     for (var i = 0; i < l.length; i++) if (normalizarBusca(l[i].nome) === alvo) return l[i];
     return null;
@@ -558,7 +559,7 @@
    */
   function salvarPeca(catalogo, o, substituir) {
     var lista = lerCatalogo(catalogo), quando = (o && o.quando instanceof Date ? o.quando : new Date()).toISOString();
-    var nome = limparTexto(o && o.nome, 40), entrada = montarEntrada(o && o.entrada);
+    var nome = limparTexto(o && o.nome, NOME_PECA_MAX), entrada = montarEntrada(o && o.entrada);
     if (!nome || !entrada) return { ok: false, erro: 'invalido' };
     var igual = pecaComNome(lista, nome);
     if (igual && !substituir) return { ok: false, erro: 'existe', existente: igual };
@@ -572,7 +573,7 @@
   function editarPeca(catalogo, id, m) {
     var lista = lerCatalogo(catalogo), alvo = acharPeca(lista, id);
     if (!alvo) return { ok: false, erro: 'naoExiste' };
-    var nome = limparTexto(m && m.nome, 40);
+    var nome = limparTexto(m && m.nome, NOME_PECA_MAX);
     if (!nome) return { ok: false, erro: 'invalido' };
     var outra = pecaComNome(lista, nome);
     if (outra && outra.id !== id) return { ok: false, erro: 'existe', existente: outra };
@@ -662,7 +663,7 @@
     lerBackup: lerBackup, resumoBackup: resumoBackup, descreverOrcamentos: descreverOrcamentos, juntarRegistros: juntarRegistros,
     restaurarDados: restaurarDados, desfazerRestauracao: desfazerRestauracao, descreverBackup: descreverBackup,
     textoLembreteBackup: textoLembreteBackup, gerarCSV: gerarCSV, dataBR: dataBR,
-    MAX_CATALOGO: MAX_CATALOGO, lerPeca: lerPeca, lerCatalogo: lerCatalogo, acharPeca: acharPeca, pecaComNome: pecaComNome, salvarPeca: salvarPeca,
+    MAX_CATALOGO: MAX_CATALOGO, NOME_PECA_MAX: NOME_PECA_MAX, lerPeca: lerPeca, lerCatalogo: lerCatalogo, acharPeca: acharPeca, pecaComNome: pecaComNome, salvarPeca: salvarPeca,
     editarPeca: editarPeca, excluirPeca: excluirPeca, registrarUsoPeca: registrarUsoPeca, ordenarCatalogo: ordenarCatalogo,
     filtrarCatalogo: filtrarCatalogo, descricaoDaPeca: descricaoDaPeca, entradaDoPedido: entradaDoPedido, atalhosPedido: atalhosPedido,
     compararPreco: compararPreco, descreverEntrada: descreverEntrada

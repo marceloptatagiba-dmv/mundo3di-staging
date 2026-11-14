@@ -157,6 +157,7 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
   padding:14px calc(20px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));display:flex;flex-direction:column;gap:12px}
 .folha-topo{display:flex;align-items:center;justify-content:space-between;font-size:17px;font-weight:800}
 .folha-topo span{color:var(--verde-texto)}
+#cp-titulo{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px}
 .btn.grande{height:56px;font-size:16px;font-weight:800}
 .btn.grande[aria-pressed="true"]{border-color:var(--verde);background:var(--verde);color:#fff}
 .previa{display:flex;gap:12px;align-items:center;min-height:24px}
@@ -730,7 +731,7 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
   <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="cs-titulo">
     <div class="folha-topo"><strong id="cs-titulo">Salvar no catálogo</strong>
       <button class="fechar" type="button" id="cs-fechar" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
-    <label class="campo"><span>Nome da peça</span><span class="caixa texto"><input id="cs-nome" type="text" maxlength="40" autocomplete="off" placeholder="Ex.: Suporte de celular"></span></label>
+    <label class="campo"><span>Nome da peça</span><span class="caixa texto"><input id="cs-nome" type="text" maxlength="120" autocomplete="off" placeholder="Ex.: Suporte de celular"></span></label>
     <label class="campo"><span>Descrição para o cliente (opcional)</span><span class="caixa texto"><input id="cs-desc" type="text" maxlength="120" autocomplete="off" placeholder="Igual ao nome"></span></label>
     <div class="salvo-box"><span class="tag">O que fica salvo</span><strong id="cs-resumo"></strong><span id="cs-preco"></span></div>
     <p class="alerta" id="cs-aviso" hidden></p>
@@ -769,7 +770,7 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
   <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="ce-titulo">
     <div class="folha-topo"><strong id="ce-titulo">Editar peça</strong>
       <button class="fechar" type="button" id="ce-fechar" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
-    <label class="campo"><span>Nome da peça</span><span class="caixa texto"><input id="ce-nome" type="text" maxlength="40" autocomplete="off"></span></label>
+    <label class="campo"><span>Nome da peça</span><span class="caixa texto"><input id="ce-nome" type="text" maxlength="120" autocomplete="off"></span></label>
     <label class="campo"><span>Descrição para o cliente (opcional)</span><span class="caixa texto"><input id="ce-desc" type="text" maxlength="120" autocomplete="off" placeholder="Igual ao nome"></span></label>
     <p class="ajuda neutra">Para mudar peso, tempo ou margem, abra a peça na calculadora e salve de novo com o mesmo nome.</p>
     <p class="alerta" id="ce-aviso" hidden></p>

@@ -574,7 +574,12 @@
     igual('catálogo: peça guarda a entrada da mesa e a data da referência', JSON.stringify(s1.peca.entrada) + '|' + s1.peca.precoRefEm, JSON.stringify(D.montarEntrada(entMesa)) + '|' + catQuando.toISOString());
     igual('catálogo: precoRefEm vindo do histórico é mantido', D.salvarPeca([], { nome: 'A', entrada: entMesa, precoRef: 1, precoRefEm: '2026-10-28T12:00:00.000Z' }).peca.precoRefEm, '2026-10-28T12:00:00.000Z');
     igual('catálogo: nome vazio ou sem entrada não salva', D.salvarPeca([], { nome: '  ', entrada: entMesa }).erro + '|' + D.salvarPeca([], { nome: 'A' }).erro, 'invalido|invalido');
-    igual('catálogo: nome cortado em 40 e descrição em 120', D.salvarPeca([], { nome: new Array(60).join('a'), descricao: new Array(200).join('b'), entrada: entMesa }).peca.nome.length + '|' + D.salvarPeca([], { nome: 'A', descricao: new Array(200).join('b'), entrada: entMesa }).peca.descricao.length, '40|120');
+    igual('catálogo: nome cortado em 120 e descrição em 120', D.salvarPeca([], { nome: new Array(200).join('a'), descricao: new Array(200).join('b'), entrada: entMesa }).peca.nome.length + '|' + D.salvarPeca([], { nome: 'A', descricao: new Array(200).join('b'), entrada: entMesa }).peca.descricao.length, '120|120');
+    var nomeLongo = 'Abridor de lata Boneco de Neve - cód. 3524517';
+    igual('catálogo: nome de 45 letras (v0.4.1) é salvo inteiro', nomeLongo.length + '|' + D.salvarPeca([], { nome: nomeLongo, entrada: entMesa }).peca.nome, '45|' + nomeLongo);
+    igual('catálogo: nome longo é lido inteiro e a busca por nome o acha', D.lerCatalogo(D.salvarPeca([], { nome: nomeLongo, entrada: entMesa }).lista)[0].nome + '|' + !!D.pecaComNome(D.salvarPeca([], { nome: nomeLongo, entrada: entMesa }).lista, nomeLongo), nomeLongo + '|true');
+    var curta = D.salvarPeca([], { nome: 'Curto', entrada: entMesa }).lista;
+    igual('catálogo: editar aceita nome longo e o limite exportado é 120', D.editarPeca(curta, curta[0].id, { nome: nomeLongo }).lista[0].nome.length + '|' + D.NOME_PECA_MAX, '45|120');
     var ex1 = D.salvarPeca(s1.lista, { nome: 'SUPORTE DE CELULAR', entrada: entMesa, precoRef: 7 });
     igual('catálogo: nome igual (sem diferenciar maiúscula) pergunta antes de substituir', ex1.ok + '|' + ex1.erro + '|' + ex1.existente.id, 'false|existe|' + s1.peca.id);
     igual('catálogo: nome igual sem acento também conta', D.pecaComNome(D.salvarPeca([], { nome: 'Pingente Coração', entrada: entMesa }).lista, 'pingente coracao') !== null, true);
