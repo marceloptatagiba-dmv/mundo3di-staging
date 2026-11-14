@@ -139,6 +139,13 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 .marcar{display:flex;align-items:flex-start;gap:10px;font-size:13px;font-weight:600;line-height:1.4;padding:4px 0}
 .btn.mais{height:46px;font-size:14px;color:var(--verde-texto)}
 .btn.mais[hidden]{display:none}
+.bloco{display:flex;flex-direction:column;gap:10px}
+.bloco[hidden]{display:none}
+.resumo-hora{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:12px;background:var(--fundo);border:1.5px solid var(--linha)}
+.resumo-hora strong{font-size:15px;font-weight:800}
+.resumo-hora span{font-size:12px;font-weight:500;color:var(--suave);line-height:1.4}
+.resumo-hora span.alerta{font-weight:700;color:#B45309}
+.resumo-hora span:empty{display:none}
 .aviso{position:fixed;left:50%;top:calc(84px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-20px);background:var(--preto);color:#fff;font-size:14px;font-weight:700;
   padding:12px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10}
 .aviso.ver{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -210,7 +217,9 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
         </summary>
         <div class="corpo" aria-label="Detalhamento do cálculo">
           <div class="linha"><div class="rot"><strong>Material</strong><span id="d-material"></span></div><span class="val" id="v-material"></span></div>
-          <div class="linha"><div class="rot"><strong>Impressão</strong><span id="d-impressao"></span></div><span class="val" id="v-impressao"></span></div>
+          <div class="linha" id="r-impressao"><div class="rot"><strong>Impressão</strong><span id="d-impressao"></span></div><span class="val" id="v-impressao"></span></div>
+          <div class="linha" id="r-energia" hidden><div class="rot"><strong>Energia</strong><span id="d-energia"></span></div><span class="val" id="v-energia"></span></div>
+          <div class="linha" id="r-desgaste" hidden><div class="rot"><strong>Desgaste da impressora</strong><span id="d-desgaste"></span></div><span class="val" id="v-desgaste"></span></div>
           <div class="divisor"></div>
           <div class="linha forte"><div class="rot"><strong>Custo base</strong></div><span class="val" id="v-base"></span></div>
           <div class="linha suave"><div class="rot"><strong id="r-perda">Perda/Refugo</strong></div><span class="val" id="v-perda"></span></div>
@@ -265,10 +274,54 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
         <label class="marcar"><input type="checkbox" id="cfg-mostrar-material"><span>Mostrar o filamento no orçamento enviado ao cliente</span></label>
         <div class="divisor"></div>
         <h2 class="titulo-secao">Custos</h2>
-        <label class="campo"><span>Valor da hora de impressão</span>
-          <span class="caixa"><b>R$</b><input id="cfg-hora" type="text" inputmode="decimal" autocomplete="off"><small>/h</small></span>
-          <span class="ajuda" id="a-hora"></span>
-        </label>
+        <div class="campo"><span>Custo da hora de impressão</span>
+          <div class="grade2" role="group" aria-label="Como calcular o custo da hora">
+            <button class="atalho" type="button" id="modo-simples" aria-pressed="true">Simples</button>
+            <button class="atalho" type="button" id="modo-detalhado" aria-pressed="false">Detalhado</button>
+          </div>
+        </div>
+        <div class="bloco" id="hora-simples">
+          <label class="campo"><span>Valor da hora de impressão</span>
+            <span class="caixa"><b>R$</b><input id="cfg-hora" type="text" inputmode="decimal" autocomplete="off"><small>/h</small></span>
+            <span class="ajuda" id="a-hora"></span>
+          </label>
+          <span class="ajuda neutra">Cobre manutenção, depreciação e luz da impressora.</span>
+        </div>
+        <div class="bloco" id="hora-detalhado" hidden>
+          <div class="grade2">
+            <label class="campo"><span>Potência média</span>
+              <span class="caixa"><input id="cfg-pot" type="text" inputmode="decimal" autocomplete="off" placeholder="0"><small>W</small></span>
+            </label>
+            <label class="campo"><span>Tarifa de energia</span>
+              <span class="caixa"><b>R$</b><input id="cfg-tarifa" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00"><small>/kWh</small></span>
+            </label>
+          </div>
+          <span class="ajuda neutra">Potência: meça com uma tomada medidora (não use o valor da fonte). Tarifa: total da conta ÷ kWh consumidos, já com impostos e bandeira.</span>
+          <label class="campo"><span>Preço da impressora</span>
+            <span class="caixa"><b>R$</b><input id="cfg-preco-imp" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00"></span>
+          </label>
+          <label class="campo"><span>Valor de revenda</span>
+            <span class="caixa"><b>R$</b><input id="cfg-revenda" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00"></span>
+            <span class="ajuda neutra">Quanto ela valeria no fim da vida útil.</span>
+          </label>
+          <div class="grade2">
+            <label class="campo"><span>Vida útil</span>
+              <span class="caixa"><input id="cfg-vida" type="text" inputmode="numeric" autocomplete="off" placeholder="0"><small>h</small></span>
+            </label>
+            <label class="campo"><span>Impressas por ano</span>
+              <span class="caixa"><input id="cfg-horas-ano" type="text" inputmode="numeric" autocomplete="off" placeholder="0"><small>h/ano</small></span>
+            </label>
+          </div>
+          <label class="campo"><span>Manutenção por ano</span>
+            <span class="caixa"><b>R$</b><input id="cfg-manut" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00"></span>
+            <span class="ajuda neutra">Bico, correia, lubrificação, peças de troca.</span>
+          </label>
+          <div class="resumo-hora" aria-live="polite">
+            <strong id="a-det-total"></strong>
+            <span id="a-det-partes"></span>
+            <span id="a-det-comparar"></span>
+          </div>
+        </div>
         <label class="campo"><span>Perda/Refugo</span>
           <span class="caixa"><input id="cfg-perda" type="text" inputmode="decimal" autocomplete="off"><small>%</small></span>
           <span class="ajuda neutra">Acrescentado ao custo base para chegar ao custo total</span>

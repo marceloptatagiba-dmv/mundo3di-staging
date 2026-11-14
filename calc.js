@@ -61,9 +61,14 @@
     var extrasPeca = e.extrasPeca > 0 ? e.extrasPeca : 0;
     var minimo = e.minimo > 0 ? e.minimo : 0;
     var valorGrama = e.precoKg / 1000;
-    var valorMinuto = e.valorHora / 60;
+    /* Custo da hora detalhado: energiaHora e desgasteHora (R$/h) vêm de calcularImpressora(); sem eles vale o valor simples. */
+    var detalhado = typeof e.energiaHora === 'number' && typeof e.desgasteHora === 'number';
+    var valorHora = detalhado ? e.energiaHora + e.desgasteHora : e.valorHora;
+    var valorMinuto = valorHora / 60;
+    var energia = detalhado ? e.tempo * e.energiaHora / 60 : 0;
+    var desgaste = detalhado ? e.tempo * e.desgasteHora / 60 : 0;
     var material = e.peso * valorGrama;
-    var impressao = e.tempo * valorMinuto;
+    var impressao = detalhado ? energia + desgaste : e.tempo * valorMinuto;
     var custoBase = material + impressao;
     var perda = custoBase * e.perdaPct / 100;
     var extras = extrasPeca * qtd;
@@ -77,6 +82,9 @@
       valorMinuto: valorMinuto,
       material: material,
       impressao: impressao,
+      detalhado: detalhado,
+      energia: energia,
+      desgaste: desgaste,
       custoBase: custoBase,
       perda: perda,
       extras: extras,
@@ -137,6 +145,52 @@
     return { materiais: lista, materialPadrao: padrao };
   }
 
+  /* ---------- Energia e desgaste da impressora (custo da hora detalhado) ---------- */
+
+  var MAX_HORAS_ANO = 8760; // horas de um ano
+
+  /* Valor em reais/watts que pode vir com separador de milhar: "4.000" = 4000, "4.000,50" = 4000,5, "12.5" = 12,5. */
+  function lerDinheiro(valor) {
+    var s = String(valor == null ? '' : valor).trim().replace(/\s/g, '');
+    if (/^[1-9]\d{0,2}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    return lerNumero(s);
+  }
+
+  /* Inteiro >= 0 (vida útil, horas por ano): "6.000", "6 000" e "6000" = 6000. Vazio ou inválido = 0. */
+  function lerInteiro(valor) {
+    var n = parseInt(String(valor == null ? '' : valor).split(',')[0].replace(/\D/g, ''), 10);
+    return isFinite(n) && n > 0 ? Math.min(n, 1000000) : 0;
+  }
+
+  /* Campos da impressora de uma configuração salva (objeto "impressora"). Tudo que faltar ou for inválido vira 0. */
+  function lerImpressora(salvo) {
+    var s = salvo && typeof salvo === 'object' ? salvo : {};
+    function n(v) { return numeroValido(v) ? v : 0; }
+    return {
+      potenciaW: n(s.potenciaW), tarifa: n(s.tarifa), preco: n(s.preco), revenda: n(s.revenda),
+      vidaUtil: n(s.vidaUtil), manutencaoAno: n(s.manutencaoAno), horasAno: Math.min(n(s.horasAno), MAX_HORAS_ANO)
+    };
+  }
+
+  /*
+   * Custo da hora no modo detalhado (R$ por hora de impressão):
+   *   Energia   = potência (W) ÷ 1000 × tarifa (R$/kWh)
+   *   Desgaste  = (preço − revenda) ÷ vida útil (h)  +  manutenção por ano ÷ horas impressas por ano
+   *   Hora      = energia + desgaste
+   * Vida útil ou horas por ano em branco (0) desligam a respectiva parte; revenda acima do preço não gera crédito.
+   */
+  function calcularImpressora(p) {
+    var i = lerImpressora(p);
+    var energiaHora = i.potenciaW / 1000 * i.tarifa;
+    var depreciacaoHora = i.vidaUtil > 0 ? Math.max(0, i.preco - i.revenda) / i.vidaUtil : 0;
+    var manutencaoHora = i.horasAno > 0 ? i.manutencaoAno / i.horasAno : 0;
+    var desgasteHora = depreciacaoHora + manutencaoHora;
+    return {
+      energiaHora: energiaHora, depreciacaoHora: depreciacaoHora, manutencaoHora: manutencaoHora,
+      desgasteHora: desgasteHora, horaTotal: energiaHora + desgasteHora
+    };
+  }
+
   var fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   function moeda(n) { return fmtBRL.format(n); }
   function decimal(n, min, max) {
@@ -166,7 +220,9 @@
     lerQuantidade: lerQuantidade, calcular: calcular, moeda: moeda, decimal: decimal,
     textoOrcamento: textoOrcamento,
     PESO_ROLO_PADRAO: PESO_ROLO_PADRAO, MAX_MATERIAIS: MAX_MATERIAIS,
-    precoKgMaterial: precoKgMaterial, lerMateriais: lerMateriais, lerPesoRolo: lerPesoRolo
+    precoKgMaterial: precoKgMaterial, lerMateriais: lerMateriais, lerPesoRolo: lerPesoRolo,
+    lerDinheiro: lerDinheiro, lerInteiro: lerInteiro, lerImpressora: lerImpressora, calcularImpressora: calcularImpressora,
+    MAX_HORAS_ANO: MAX_HORAS_ANO
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = Calc; }
   root.Calc = Calc;

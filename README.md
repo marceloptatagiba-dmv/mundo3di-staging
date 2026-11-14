@@ -7,7 +7,7 @@ App web instalável (PWA) para montar e enviar orçamentos de peças impressas e
 | Etapa | Fórmula |
 |---|---|
 | Material | peso (g) × preço do rolo ÷ peso do rolo (g) — do filamento escolhido na tela (PLA, PETG, TPU…) |
-| Impressão | tempo (min) × valor da hora (R$/h) ÷ 60 — o tempo aceita `2h35`, `2:35`, `2h` ou só minutos (`155`) |
+| Impressão | tempo (min) × valor da hora (R$/h) ÷ 60 — o tempo aceita `2h35`, `2:35`, `2h` ou só minutos (`155`). No modo **Detalhado** do custo da hora, vira **Energia** + **Desgaste da impressora** (veja abaixo) |
 | Custo base | Material + Impressão |
 | Perda/Refugo | Custo base × perda % (padrão 5%) |
 | Extras | extras por peça × quantidade de peças (embalagem, acabamento, insumos, frete; sem perda) |
@@ -19,6 +19,8 @@ App web instalável (PWA) para montar e enviar orçamentos de peças impressas e
 Peso e tempo são os da **mesa inteira** (como o fatiador informa); "Peças na mesa" divide o valor para dar o preço de cada peça. O botão **Enviar orçamento** abre o compartilhamento do celular (WhatsApp etc.) com um texto pronto, sem mostrar custo nem margem.
 
 **Filamentos:** em Configurações há uma lista de filamentos (nome, preço do rolo e peso do rolo — padrão 1000 g). Um deles é o padrão; na tela de orçamento o seletor ao lado de "Peso da mesa" troca o filamento, e o app lembra o último usado. Quem vinha da v2 ganha o filamento "PLA" com o preço do rolo que já estava salvo. O nome do filamento só aparece no orçamento enviado se a opção "Mostrar o filamento no orçamento" estiver ligada (vem desligada). "Restaurar padrões" volta hora, perda e preço mínimo, sem mexer na lista de filamentos.
+
+**Custo da hora (Simples ou Detalhado):** em Configurações > Custos, o **Simples** é o campo único de sempre (R$ 2,25/h, que já cobre manutenção, depreciação e luz). O **Detalhado** separa energia e desgaste: potência média (W, medida com tomada medidora), tarifa (R$/kWh = total da conta ÷ kWh, com impostos e bandeira), preço da impressora, valor de revenda, vida útil (h), manutenção por ano (R$) e horas impressas por ano. Energia/h = potência ÷ 1000 × tarifa. Desgaste/h = (preço − revenda) ÷ vida útil + manutenção por ano ÷ horas por ano. Hora = energia + desgaste. O app mostra o valor por hora ao vivo e avisa se ficar abaixo do valor do modo Simples. Alternar o modo não apaga nenhum campo, e o modo escolhido vale para todos os orçamentos. No "Ver cálculo", a linha "Impressão" vira "Energia" e "Desgaste da impressora". "Restaurar padrões" não mexe no modo nem nos dados da impressora.
 
 Padrões das configurações: PLA a R$ 150,00 o rolo de 1000 g, hora R$ 2,25/h, perda 5%, preço mínimo R$ 0,00. Cada celular guarda as próprias configurações.
 

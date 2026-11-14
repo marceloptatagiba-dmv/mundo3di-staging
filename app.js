@@ -24,6 +24,9 @@
     cfg.materiais = mats.materiais;
     cfg.materialPadrao = mats.materialPadrao;
     cfg.mostrarMaterial = !!(salvo && salvo.mostrarMaterial === true);
+    /* Custo da hora: Simples (padrão, usa valorHora) ou Detalhado (usa o objeto "impressora"). Os dois ficam salvos. */
+    cfg.modoHora = salvo && salvo.modoHora === 'detalhado' ? 'detalhado' : 'simples';
+    cfg.impressora = C.lerImpressora(salvo && salvo.impressora);
     cfg.precoKg = C.precoKgMaterial(materialPorId(cfg, cfg.materialPadrao));
     return cfg;
   }
@@ -86,14 +89,26 @@
     var extrasPeca = C.lerNumero(eExtras.value);
     var fil = filamentoAtual();
     var precoKg = C.precoKgMaterial(fil);
+    var imp = config.modoHora === 'detalhado' ? C.calcularImpressora(config.impressora) : null;
     var r = C.calcular({ peso: peso, tempo: tempo, margemPct: margem, qtd: qtd, extrasPeca: extrasPeca,
-      precoKg: precoKg, valorHora: config.valorHora, perdaPct: config.perdaPct, minimo: config.minimo });
+      precoKg: precoKg, valorHora: config.valorHora, perdaPct: config.perdaPct, minimo: config.minimo,
+      energiaHora: imp ? imp.energiaHora : undefined, desgasteHora: imp ? imp.desgasteHora : undefined });
 
     if ($('material-nome').textContent !== fil.nome) { $('material-nome').textContent = fil.nome; ajustarRotuloPeso(); }
     $('d-material').textContent = num(peso) + ' g de ' + fil.nome + ' × ' + moeda(precoKg) + '/kg';
     $('v-material').textContent = moeda(r.material);
+    /* Modo simples: uma linha "Impressão". Modo detalhado: "Energia" e "Desgaste da impressora". */
+    $('r-impressao').hidden = r.detalhado;
+    $('r-energia').hidden = !r.detalhado;
+    $('r-desgaste').hidden = !r.detalhado;
     $('d-impressao').textContent = C.formatarTempo(tempo) + ' × ' + moeda(config.valorHora) + '/h';
     $('v-impressao').textContent = moeda(r.impressao);
+    if (imp) {
+      $('d-energia').textContent = C.formatarTempo(tempo) + ' × ' + moeda(imp.energiaHora) + '/h';
+      $('v-energia').textContent = moeda(r.energia);
+      $('d-desgaste').textContent = C.formatarTempo(tempo) + ' × ' + moeda(imp.desgasteHora) + '/h';
+      $('v-desgaste').textContent = moeda(r.desgaste);
+    }
     $('v-base').textContent = moeda(r.custoBase);
     $('r-perda').textContent = 'Perda/Refugo (' + num(config.perdaPct) + '%)';
     $('v-perda').textContent = '+ ' + moeda(r.perda);
@@ -177,6 +192,9 @@
 
   /* ---------- Tela de configurações ---------- */
   var cHora = $('cfg-hora'), cPerda = $('cfg-perda'), cMin = $('cfg-minimo'), cMostrar = $('cfg-mostrar-material');
+  var cPot = $('cfg-pot'), cTarifa = $('cfg-tarifa'), cPrecoImp = $('cfg-preco-imp'), cRevenda = $('cfg-revenda'),
+      cVida = $('cfg-vida'), cHorasAno = $('cfg-horas-ano'), cManut = $('cfg-manut');
+  var modoEdicao = 'simples';
   var lista = $('lista-materiais');
   var ICONE_LIXO = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
@@ -240,6 +258,8 @@
     estadoLista();
     cMostrar.checked = !!cfg.mostrarMaterial;
     preencherCustos(cfg);
+    preencherImpressora(cfg.impressora);
+    definirModo(cfg.modoHora);
   }
   function preencherCustos(cfg) {
     cHora.value = dinheiro(cfg.valorHora);
@@ -247,10 +267,57 @@
     cMin.value = dinheiro(cfg.minimo || 0);
     ajudasConfig();
   }
-  function ajudasConfig() {
-    $('a-hora').textContent = 'Equivale a R$ ' + fino(C.lerNumero(cHora.value) / 60) + ' por minuto';
+  /* Campos da impressora: vazios quando 0 (aparece o "0" cinza do placeholder) */
+  function preencherImpressora(p) {
+    function din(n) { return n > 0 ? dinheiro(n) : ''; }
+    cPot.value = p.potenciaW > 0 ? num(p.potenciaW) : '';
+    cTarifa.value = p.tarifa > 0 ? fino(p.tarifa) : '';
+    cPrecoImp.value = din(p.preco);
+    cRevenda.value = din(p.revenda);
+    cVida.value = p.vidaUtil > 0 ? String(Math.round(p.vidaUtil)) : '';      // sem separador de milhar
+    cHorasAno.value = p.horasAno > 0 ? String(Math.round(p.horasAno)) : '';
+    cManut.value = din(p.manutencaoAno);
   }
-  [cHora, cPerda, cMin].forEach(function (el) {
+  function lerImpressoraTela() {
+    return C.lerImpressora({
+      potenciaW: C.lerDinheiro(cPot.value), tarifa: C.lerNumero(cTarifa.value),
+      preco: C.lerDinheiro(cPrecoImp.value), revenda: C.lerDinheiro(cRevenda.value),
+      vidaUtil: C.lerInteiro(cVida.value), horasAno: C.lerInteiro(cHorasAno.value),
+      manutencaoAno: C.lerDinheiro(cManut.value)
+    });
+  }
+  /* Alternar entre Simples e Detalhado só mostra/esconde: nenhum campo é apagado */
+  function definirModo(modo) {
+    modoEdicao = modo === 'detalhado' ? 'detalhado' : 'simples';
+    $('modo-simples').setAttribute('aria-pressed', String(modoEdicao === 'simples'));
+    $('modo-detalhado').setAttribute('aria-pressed', String(modoEdicao === 'detalhado'));
+    $('hora-simples').hidden = modoEdicao !== 'simples';
+    $('hora-detalhado').hidden = modoEdicao !== 'detalhado';
+    ajudasConfig();
+  }
+  $('modo-simples').addEventListener('click', function () { definirModo('simples'); });
+  $('modo-detalhado').addEventListener('click', function () { definirModo('detalhado'); });
+
+  function ajudasConfig() {
+    var simples = C.lerNumero(cHora.value);
+    $('a-hora').textContent = 'Equivale a R$ ' + fino(simples / 60) + ' por minuto';
+    /* Valor por hora calculado ao vivo, comparado com o modo Simples (evita baixar o preço sem perceber) */
+    var p = C.calcularImpressora(lerImpressoraTela());
+    $('a-det-total').textContent = 'Custo da hora: ' + moeda(p.horaTotal) + ' por hora';
+    $('a-det-partes').textContent = 'Energia ' + moeda(p.energiaHora) + '/h + desgaste ' + moeda(p.desgasteHora) + '/h';
+    var cmp = $('a-det-comparar');
+    if (p.horaTotal <= 0) {
+      cmp.textContent = 'Preencha os campos acima para calcular. Valor do modo Simples: ' + moeda(simples) + '/h.';
+      cmp.className = 'alerta';
+    } else if (simples > 0 && p.horaTotal < simples) {
+      cmp.textContent = 'Fica abaixo do modo Simples (' + moeda(simples) + '/h). Confira antes de salvar.';
+      cmp.className = 'alerta';
+    } else {
+      cmp.textContent = 'Modo Simples: ' + moeda(simples) + '/h.';
+      cmp.className = '';
+    }
+  }
+  [cHora, cPerda, cMin, cPot, cTarifa, cPrecoImp, cRevenda, cVida, cHorasAno, cManut].forEach(function (el) {
     el.addEventListener('input', ajudasConfig);
     selecionarAoFocar(el);
   });
@@ -265,7 +332,8 @@
     var mats = C.lerMateriais({ materiais: materiais, materialPadrao: padrao });
     config = {
       valorHora: C.lerNumero(cHora.value), perdaPct: C.lerNumero(cPerda.value), minimo: C.lerNumero(cMin.value),
-      materiais: mats.materiais, materialPadrao: mats.materialPadrao, mostrarMaterial: cMostrar.checked
+      materiais: mats.materiais, materialPadrao: mats.materialPadrao, mostrarMaterial: cMostrar.checked,
+      modoHora: modoEdicao, impressora: lerImpressoraTela()
     };
     config.precoKg = C.precoKgMaterial(materialPorId(config, config.materialPadrao)); // compatibilidade com a v2
     var ok = salvarConfig(config);
@@ -274,7 +342,7 @@
     sairConfig();
     avisar(ok ? 'Configurações salvas' : 'Salvo só até fechar o app');
   });
-  /* Restaura hora, perda e preço mínimo; a lista de filamentos é mantida */
+  /* Restaura hora (modo Simples), perda e preço mínimo; a lista de filamentos, o modo escolhido e os dados da impressora são mantidos */
   $('restaurar').addEventListener('click', function () {
     preencherCustos(C.PADROES);
     avisar('Padrões restaurados — toque em Salvar');
