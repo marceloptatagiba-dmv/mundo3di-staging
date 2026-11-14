@@ -290,6 +290,23 @@
       cores: [{ gramas: 30, precoKg: 150 }, { gramas: 10, precoKg: 120 }], purgaG: 8 });
     igual('multicor: margem 100% e arredondamento inteiro → R$ 14,00', m(rMcArr.valorCobrar), 'R$ 14,00');
 
+    // ---------- telefone (WhatsApp) ----------
+    var ft = C.formatarTelefone;
+    igual('telefone: celular 11 dígitos', ft('21988980197'), '(21) 98898-0197');
+    igual('telefone: fixo 10 dígitos', ft('2133334444'), '(21) 3333-4444');
+    igual('telefone: digitando 1 dígito', ft('2'), '(2');
+    igual('telefone: digitando 2 dígitos', ft('21'), '(21');
+    igual('telefone: digitando 3 dígitos', ft('219'), '(21) 9');
+    igual('telefone: digitando 6 dígitos', ft('219889'), '(21) 9889');
+    igual('telefone: digitando 7 dígitos', ft('2198898'), '(21) 9889-8');
+    igual('telefone: já formatado não muda', ft('(21) 98898-0197'), '(21) 98898-0197');
+    igual('telefone: com +55', ft('+55 21 98898-0197'), '(21) 98898-0197');
+    igual('telefone: mais de 11 dígitos corta', ft('219889801971234'), '(21) 98898-0197');
+    igual('telefone: vazio e letras', ft('') + '|' + ft('abc'), '|');
+    igual('telefone: salvo só com números aparece formatado', C.lerNegocio({ whatsapp: '21988980197' }).whatsapp, '(21) 98898-0197');
+    igual('telefone: imagem usa formato', C.dadosOrcamento(r1, { negocio: { whatsapp: '2133334444' }, numero: 1 }).whatsapp, '(21) 3333-4444');
+    igual('telefone: texto livre (não telefone) fica como está', C.lerNegocio({ whatsapp: 'só pelo Insta' }).whatsapp, 'só pelo Insta');
+
     return resultados;
   }
 

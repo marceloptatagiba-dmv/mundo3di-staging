@@ -274,6 +274,22 @@
     return n.toLocaleString('pt-BR', { minimumFractionDigits: min, maximumFractionDigits: max });
   }
 
+  /*
+   * Telefone no padrão brasileiro: (21) 8898-0197 (fixo, 10 dígitos) ou (21) 98898-0197 (celular, 11 dígitos).
+   * Vai formatando enquanto digita. Ignora o "+55"/"55" quando vem com DDI (12 ou 13 dígitos). Mais de 11 dígitos: corta.
+   */
+  function formatarTelefone(texto) {
+    var d = String(texto == null ? '' : texto).replace(/\D/g, '');
+    if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
+    d = d.slice(0, 11);
+    if (!d) return '';
+    if (d.length <= 2) return '(' + d;
+    var corte = d.length > 10 ? 7 : 6;                     // 11 dígitos: 5+4; até 10: 4+4
+    var ddd = '(' + d.slice(0, 2) + ') ';
+    if (d.length <= corte) return ddd + d.slice(2);
+    return ddd + d.slice(2, corte) + '-' + d.slice(corte);
+  }
+
   /* ---------- Meu negócio, numeração e registro de envios ---------- */
 
   var NOME_PADRAO = 'Mundo 3DI';
@@ -288,6 +304,9 @@
     Object.keys(LIMITES_NEGOCIO).forEach(function (k) {
       n[k] = String(s[k] == null ? '' : s[k]).replace(/\s+/g, ' ').trim().slice(0, LIMITES_NEGOCIO[k]);
     });
+    // WhatsApp salvo só com números (ou em outro formato) aparece sempre como (xx) xxxx-xxxx
+    var dw = n.whatsapp.replace(/\D/g, '');
+    if (dw.length === 10 || dw.length === 11 || (dw.length >= 12 && dw.length <= 13 && dw.slice(0, 2) === '55')) n.whatsapp = formatarTelefone(dw);
     n.validadeDias = typeof s.validadeDias === 'number' && isFinite(s.validadeDias) && s.validadeDias >= 0
       ? Math.min(Math.round(s.validadeDias), 365) : VALIDADE_PADRAO;
     return n;
@@ -381,6 +400,7 @@
     precoKgMaterial: precoKgMaterial, lerMateriais: lerMateriais, lerPesoRolo: lerPesoRolo,
     lerDinheiro: lerDinheiro, lerInteiro: lerInteiro, lerImpressora: lerImpressora, calcularImpressora: calcularImpressora,
     MAX_HORAS_ANO: MAX_HORAS_ANO,
+    formatarTelefone: formatarTelefone,
     MAX_CORES: MAX_CORES, resumirCores: resumirCores,
     MODOS_ARREDONDAMENTO: MODOS_ARREDONDAMENTO, lerArredondamento: lerArredondamento, arredondarCima: arredondarCima,
     NOME_PADRAO: NOME_PADRAO, LIMITES_NEGOCIO: LIMITES_NEGOCIO, VALIDADE_PADRAO: VALIDADE_PADRAO, MAX_REGISTROS: MAX_REGISTROS,

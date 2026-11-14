@@ -6,7 +6,7 @@
   root.AMBIENTE_3DI = {
     nome: 'teste',
     prefixoCache: 'calc3di-teste',
-    versaoCache: 'v9',
+    versaoCache: 'v10',
     chaveConfig: 'mundo3di-teste-config',
     extraCache: ['testes.html', 'testes-casos.js']
   };
