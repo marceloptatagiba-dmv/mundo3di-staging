@@ -159,6 +159,58 @@
     igual('modo detalhado: valorHora simples é ignorado', m(C.calcular(Object.assign({}, base, { valorHora: 99, tempo: 60, peso: 0, energiaHora: imp.energiaHora, desgasteHora: imp.desgasteHora })).impressao), 'R$ 0,81');
     igual('planilha segue R$ 2,36 com o modo simples', m(C.calcular(base).valorCobrar), 'R$ 2,36');
 
+    // v3 · 3. orçamento em imagem: numeração, dados, registro
+    [[1, '0001'], [7, '0007'], [42, '0042'], [1234, '1234'], [12345, '12345'], [0, '0000'], ['x', '0000']].forEach(function (t) {
+      igual('formatarNumero ' + t[0], C.formatarNumero(t[0]), t[1]);
+    });
+    igual('formatarData', C.formatarData(new Date(2026, 10, 14)), '14/11/2026');
+    var neg0 = C.lerNegocio(null);
+    igual('negócio vazio: validade padrão 7 dias', neg0.validadeDias, 7);
+    igual('negócio vazio: textos vazios', neg0.nome + neg0.whatsapp + neg0.pagamento + neg0.obs, '');
+    var neg1 = C.lerNegocio({ nome: '  Oficina   do João  ', whatsapp: '(11) 99999-0000', obs: new Array(300).join('x'), validadeDias: 0 });
+    igual('negócio: espaços aparados e repetidos juntados', neg1.nome, 'Oficina do João');
+    igual('negócio: observação limitada a 160', neg1.obs.length, 160);
+    igual('negócio: validade 0 é respeitada (não mostrar)', neg1.validadeDias, 0);
+    igual('negócio: validade inválida volta a 7', C.lerNegocio({ validadeDias: -3 }).validadeDias, 7);
+    igual('negócio: validade máxima 365', C.lerNegocio({ validadeDias: 9999 }).validadeDias, 365);
+    var hoje = new Date(2026, 10, 14, 15, 30);
+    var d1 = C.dadosOrcamento(r1, { negocio: null, numero: 3, data: hoje });
+    igual('dados: nº', d1.numero, '0003');
+    igual('dados: data e validade (+7 dias)', d1.data + ' → ' + d1.validade, '14/11/2026 → 21/11/2026');
+    igual('dados: nome padrão Mundo 3DI', d1.negocioNome, 'Mundo 3DI');
+    igual('dados: 1 peça sem "valor por peça"', d1.valorPeca, '');
+    igual('dados: total', d1.total.replace(NB, ' '), 'R$ 2,36');
+    igual('dados: descrição padrão (1 peça)', d1.descricao, 'Peça impressa em 3D');
+    var d3 = C.dadosOrcamento(r3, { negocio: { nome: 'Oficina X', validadeDias: 15, pagamento: 'Pix ou cartão', obs: 'Garantia de 30 dias' },
+      numero: 12, data: hoje, cliente: ' Maria ', descricao: 'Suporte de celular', material: 'PETG', prazo: '5 dias úteis' });
+    igual('dados: 3 peças mostram valor por peça', d3.valorPeca.replace(NB, ' ') + ' / ' + d3.total.replace(NB, ' '), 'R$ 2,36 / R$ 7,09');
+    igual('dados: validade de 15 dias', d3.validade, '29/11/2026');
+    igual('dados: campos preenchidos', [d3.negocioNome, d3.cliente, d3.descricao, d3.material, d3.prazo, d3.pagamento, d3.obs].join('|'),
+      'Oficina X|Maria|Suporte de celular|PETG|5 dias úteis|Pix ou cartão|Garantia de 30 dias');
+    igual('dados: descrição padrão (3 peças)', C.dadosOrcamento(r3, { numero: 1, data: hoje }).descricao, '3 peças impressas em 3D');
+    igual('dados: validade 0 não mostra validade', C.dadosOrcamento(r1, { negocio: { validadeDias: 0 }, numero: 1, data: hoje }).validade, '');
+    var rExtra = com({ extrasPeca: 1.5, qtd: 2, energiaHora: 0.114, desgasteHora: 0.7, peso: 40, tempo: 120 });
+    var dadosExtra = JSON.stringify(C.dadosOrcamento(rExtra, { negocio: { nome: 'Oficina X', pagamento: 'Pix', obs: 'Obrigado' }, numero: 5, data: hoje, cliente: 'Ana', descricao: 'Vaso', material: 'PLA', prazo: '3 dias' })).toLowerCase();
+    igual('dados (imagem) nunca trazem custo, margem, perda, lucro, energia ou desgaste', /custo|margem|lucro|perda|energia|desgaste/.test(dadosExtra), false);
+    var chaves = Object.keys(C.dadosOrcamento(rExtra, { numero: 1 })).sort().join(',');
+    igual('dados: só os campos esperados (nenhum campo de custo entra por acidente)', chaves,
+      'cidade,cliente,cnpj,data,descricao,instagram,material,negocioNome,numero,obs,pagamento,prazo,qtd,total,validade,valorPeca,whatsapp');
+    igual('dados: valores de custo não aparecem em lugar nenhum',
+      [rExtra.custoTotal, rExtra.lucro, rExtra.perda, rExtra.custoBase].every(function (v) { return dadosExtra.indexOf(m(v).replace(NB, ' ').toLowerCase()) === -1; }), true);
+    igual('texto com nº: título', C.textoOrcamento(r1, { numero: 7 }).replace(NB, ' '), '*Orçamento Nº 0007 — Mundo 3DI*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
+    igual('texto com nome do negócio', C.textoOrcamento(r3, { numero: 12, negocio: 'Oficina X', material: 'PETG' }).replace(NB, ' '),
+      '*Orçamento Nº 0012 — Oficina X*\n3 peças impressas em 3D\nMaterial: PETG\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
+    igual('texto sem nº continua igual à v2', C.textoOrcamento(r1).replace(NB, ' '), '*Orçamento — Mundo 3DI*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
+    var reg = C.novoRegistro(re, { numero: 9, formato: 'imagem', quando: new Date(Date.UTC(2026, 10, 14, 18, 30)), material: 'PLA', cliente: 'Ana', descricao: 'Vaso' });
+    igual('registro: nº, formato e data/hora', reg.n + ' ' + reg.formato + ' ' + reg.ts, '9 imagem 2026-11-14T18:30:00.000Z');
+    igual('registro: valores (qtd 2, extras R$ 1,50)', [reg.qtd, reg.valorPeca, reg.total, reg.custoTotal, reg.lucro].join('/'), '2/4.18/8.36/4.18/4.18');
+    igual('registro: cliente, material e peça', reg.cliente + '|' + reg.material + '|' + reg.descricao, 'Ana|PLA|Vaso');
+    igual('registro: formato desconhecido vira texto', C.novoRegistro(r1, { numero: 1, formato: 'x' }).formato, 'texto');
+    var lista = [];
+    for (var j = 1; j <= 5; j++) lista = C.adicionarRegistro(lista, { n: j }, 3);
+    igual('registros: mantém os 3 mais recentes', lista.map(function (x) { return x.n; }).join(','), '3,4,5');
+    igual('registros: lista inválida começa do zero', C.adicionarRegistro(null, { n: 1 }).length, 1);
+
     return resultados;
   }
 

@@ -27,6 +27,7 @@
     /* Custo da hora: Simples (padrão, usa valorHora) ou Detalhado (usa o objeto "impressora"). Os dois ficam salvos. */
     cfg.modoHora = salvo && salvo.modoHora === 'detalhado' ? 'detalhado' : 'simples';
     cfg.impressora = C.lerImpressora(salvo && salvo.impressora);
+    cfg.negocio = C.lerNegocio(salvo && salvo.negocio);
     cfg.precoKg = C.precoKgMaterial(materialPorId(cfg, cfg.materialPadrao));
     return cfg;
   }
@@ -170,16 +171,127 @@
     }, function () { avisar('Não foi possível copiar'); });
   });
 
-  /* ---------- Enviar orçamento (compartilhamento nativo; WhatsApp como alternativa) ---------- */
-  $('whatsapp').addEventListener('click', function () {
+  /* ---------- Numeração e registro dos envios (só neste aparelho) ---------- */
+  var CHAVE_CONT = CHAVE + '-contador';     // último número usado
+  var CHAVE_REG = CHAVE + '-registros';     // lista de envios com data e hora
+  var CHAVE_LOGO = CHAVE + '-logo';         // logo do cliente (dataURL, até 400 px)
+  var LOGO_3DI = 'img/logo-3di.png';
+
+  function lerLogoSalvo() { try { return localStorage.getItem(CHAVE_LOGO) || ''; } catch (e) { return ''; } }
+  function proximoNumero() {
+    var n = 0;
+    try { n = parseInt(localStorage.getItem(CHAVE_CONT) || '0', 10) || 0; } catch (e) {}
+    return n + 1;
+  }
+  /* Grava o envio: avança o contador e guarda o registro com data e hora. Chamado só quando o envio aconteceu. */
+  function registrarEnvio(numero, formato, extra) {
+    var reg = C.novoRegistro(ultimoOrcamento, { numero: numero, formato: formato, material: extra.material, cliente: extra.cliente, descricao: extra.descricao });
+    try {
+      localStorage.setItem(CHAVE_CONT, String(numero));
+      var lista = JSON.parse(localStorage.getItem(CHAVE_REG) || '[]');
+      localStorage.setItem(CHAVE_REG, JSON.stringify(C.adicionarRegistro(lista, reg, C.MAX_REGISTROS)));
+    } catch (e) { /* armazenamento indisponível: o envio continua valendo, só não fica registrado */ }
+  }
+
+  /* ---------- Enviar orçamento: painel com Texto ou Imagem ---------- */
+  var folha = $('folha'), eImgCliente = $('img-cliente'), eImgDesc = $('img-descricao'), eImgPrazo = $('img-prazo');
+  var imagem = null;            // { arquivo, url, numero } — imagem já pronta para enviar
+  var tokenImagem = 0, timerImagem;
+
+  function nomeFilamentoEnvio() { return config.mostrarMaterial ? filamentoAtual().nome : ''; }
+  function whatsappTexto(texto) { window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener'); }
+
+  function abrirFolha() {
     if (!ultimoOrcamento || ultimoOrcamento.valorCobrar <= 0) { avisar('Preencha peso e tempo primeiro'); return; }
-    var texto = C.textoOrcamento(ultimoOrcamento, { material: config.mostrarMaterial ? filamentoAtual().nome : '' });
+    eImgCliente.value = ''; eImgDesc.value = ''; eImgPrazo.value = config.negocio.prazo;
+    $('painel-imagem').hidden = true; $('abrir-imagem').setAttribute('aria-pressed', 'false');
+    $('folha-numero').textContent = 'Nº ' + C.formatarNumero(proximoNumero());
+    descartarImagem();
+    folha.hidden = false;
+    $('enviar-texto').focus();
+  }
+  function fecharFolha() { folha.hidden = true; tokenImagem++; clearTimeout(timerImagem); descartarImagem(); }
+  $('whatsapp').addEventListener('click', abrirFolha);
+  $('folha-fechar').addEventListener('click', fecharFolha);
+  $('folha-fundo').addEventListener('click', fecharFolha);
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !folha.hidden) fecharFolha(); });
+
+  /* Texto: compartilhamento nativo; sem suporte (ou erro), abre o WhatsApp */
+  $('enviar-texto').addEventListener('click', function () {
+    var numero = proximoNumero();
+    var texto = C.textoOrcamento(ultimoOrcamento, { material: nomeFilamentoEnvio(), numero: numero, negocio: config.negocio.nome });
+    var registrar = function () { registrarEnvio(numero, 'texto', { material: nomeFilamentoEnvio() }); };
+    fecharFolha();
     if (navigator.share) {
-      navigator.share({ text: texto }).catch(function (e) {
-        if (!e || e.name !== 'AbortError') window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener');
+      navigator.share({ text: texto }).then(registrar, function (e) {
+        if (!e || e.name !== 'AbortError') { whatsappTexto(texto); registrar(); }
+      });
+    } else { whatsappTexto(texto); registrar(); }
+  });
+
+  /* Imagem: é desenhada assim que o painel abre (e a cada mudança nos campos), para o botão "Enviar imagem"
+     chamar o compartilhamento na hora do toque — o iPhone não aceita compartilhar depois de uma espera. */
+  function descartarImagem() {
+    if (imagem) URL.revokeObjectURL(imagem.url);
+    imagem = null;
+    $('img-previa').hidden = true; $('img-previa').removeAttribute('src');
+    $('enviar-imagem').disabled = true;
+  }
+  function dadosDaImagem(numero) {
+    return C.dadosOrcamento(ultimoOrcamento, {
+      negocio: config.negocio, numero: numero, data: new Date(), material: nomeFilamentoEnvio(),
+      cliente: eImgCliente.value, descricao: eImgDesc.value, prazo: eImgPrazo.value
+    });
+  }
+  function prepararImagem() {
+    var meu = ++tokenImagem, numero = proximoNumero();
+    $('img-estado').textContent = 'Preparando a imagem…';
+    $('enviar-imagem').disabled = true;
+    OrcamentoImg.gerar(dadosDaImagem(numero), lerLogoSalvo() || LOGO_3DI).then(function (blob) {
+      if (meu !== tokenImagem) return;
+      var antigo = imagem; if (antigo) URL.revokeObjectURL(antigo.url);
+      var arquivo = new File([blob], 'orcamento-' + C.formatarNumero(numero) + '.jpg', { type: 'image/jpeg' });
+      imagem = { arquivo: arquivo, url: URL.createObjectURL(blob), numero: numero };
+      $('img-previa').src = imagem.url; $('img-previa').hidden = false;
+      $('img-estado').textContent = Math.round(blob.size / 1024) + ' KB · pronta para enviar';
+      $('enviar-imagem').disabled = false;
+    }, function () {
+      if (meu !== tokenImagem) return;
+      $('img-estado').textContent = 'Não foi possível criar a imagem.';
+    });
+  }
+  function agendarImagem() {
+    if ($('painel-imagem').hidden) return;
+    $('enviar-imagem').disabled = true;
+    clearTimeout(timerImagem); timerImagem = setTimeout(prepararImagem, 250);
+  }
+  $('abrir-imagem').addEventListener('click', function () {
+    $('painel-imagem').hidden = false; $('abrir-imagem').setAttribute('aria-pressed', 'true');
+    prepararImagem();
+    eImgCliente.focus();
+  });
+  [eImgCliente, eImgDesc, eImgPrazo].forEach(function (el) { el.addEventListener('input', agendarImagem); selecionarAoFocar(el); });
+
+  function baixarImagem(img) {
+    var a = document.createElement('a');
+    a.href = img.url; a.download = img.arquivo.name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+  $('enviar-imagem').addEventListener('click', function () {
+    var img = imagem;
+    if (!img) return;
+    var extra = { material: nomeFilamentoEnvio(), cliente: C.dadosOrcamento(ultimoOrcamento, { cliente: eImgCliente.value }).cliente,
+      descricao: eImgDesc.value.trim().slice(0, 120) };
+    var registrar = function () { registrarEnvio(img.numero, 'imagem', extra); fecharFolha(); };
+    if (navigator.canShare && navigator.canShare({ files: [img.arquivo] })) {
+      navigator.share({ files: [img.arquivo] }).then(registrar, function (e) {
+        if (!e || e.name !== 'AbortError') { baixarImagem(img); registrar(); }
       });
     } else {
-      window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener');
+      baixarImagem(img);               // sem compartilhamento de arquivo: baixa o JPG
+      avisar('Imagem salva no aparelho');
+      registrarEnvio(img.numero, 'imagem', extra);
+      setTimeout(fecharFolha, 2000);    // dá tempo do download começar antes de liberar o arquivo
     }
   });
 
@@ -195,6 +307,10 @@
   var cPot = $('cfg-pot'), cTarifa = $('cfg-tarifa'), cPrecoImp = $('cfg-preco-imp'), cRevenda = $('cfg-revenda'),
       cVida = $('cfg-vida'), cHorasAno = $('cfg-horas-ano'), cManut = $('cfg-manut');
   var modoEdicao = 'simples';
+  var cNeg = { nome: $('neg-nome'), whatsapp: $('neg-whatsapp'), instagram: $('neg-instagram'), cidade: $('neg-cidade'),
+    cnpj: $('neg-cnpj'), prazo: $('neg-prazo'), pagamento: $('neg-pagamento'), obs: $('neg-obs') };
+  var cValidade = $('neg-validade');
+  var logoPendente;   // undefined = sem mudança · '' = remover · texto = novo logo (só vale ao tocar em Salvar)
   var lista = $('lista-materiais');
   var ICONE_LIXO = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
@@ -260,7 +376,38 @@
     preencherCustos(cfg);
     preencherImpressora(cfg.impressora);
     definirModo(cfg.modoHora);
+    preencherNegocio(cfg.negocio);
   }
+  /* ---------- Meu negócio e logo ---------- */
+  function preencherNegocio(n) {
+    Object.keys(cNeg).forEach(function (k) { cNeg[k].value = n[k]; });
+    cValidade.value = String(n.validadeDias);
+    logoPendente = undefined;
+    mostrarLogo(lerLogoSalvo());
+  }
+  function mostrarLogo(src) {
+    $('cfg-logo-prev').src = src || LOGO_3DI;
+    $('cfg-logo-remover').hidden = !src;
+    $('cfg-logo-escolher').textContent = src ? 'Trocar logo' : 'Escolher logo';
+    $('a-logo').textContent = src ? 'Será reduzido a 400 px neste aparelho.' : 'Sem logo seu, a imagem usa o logo 3Di.';
+  }
+  function lerNegocioTela() {
+    var n = {};
+    Object.keys(cNeg).forEach(function (k) { n[k] = cNeg[k].value; });
+    n.validadeDias = C.lerInteiro(cValidade.value);
+    return C.lerNegocio(n);
+  }
+  $('cfg-logo-escolher').addEventListener('click', function () { $('cfg-logo-arq').click(); });
+  $('cfg-logo-arq').addEventListener('change', function () {
+    var arq = this.files && this.files[0];
+    this.value = '';
+    if (!arq) return;
+    OrcamentoImg.reduzirLogo(arq).then(function (src) {
+      logoPendente = src; mostrarLogo(src);
+      avisar('Logo pronto — toque em Salvar');
+    }, function () { avisar('Não foi possível ler essa imagem'); });
+  });
+  $('cfg-logo-remover').addEventListener('click', function () { logoPendente = ''; mostrarLogo(''); });
   function preencherCustos(cfg) {
     cHora.value = dinheiro(cfg.valorHora);
     cPerda.value = num(cfg.perdaPct);
@@ -333,10 +480,16 @@
     config = {
       valorHora: C.lerNumero(cHora.value), perdaPct: C.lerNumero(cPerda.value), minimo: C.lerNumero(cMin.value),
       materiais: mats.materiais, materialPadrao: mats.materialPadrao, mostrarMaterial: cMostrar.checked,
-      modoHora: modoEdicao, impressora: lerImpressoraTela()
+      modoHora: modoEdicao, impressora: lerImpressoraTela(), negocio: lerNegocioTela()
     };
     config.precoKg = C.precoKgMaterial(materialPorId(config, config.materialPadrao)); // compatibilidade com a v2
     var ok = salvarConfig(config);
+    if (logoPendente !== undefined) {
+      try {
+        if (logoPendente) localStorage.setItem(CHAVE_LOGO, logoPendente); else localStorage.removeItem(CHAVE_LOGO);
+      } catch (e) { ok = false; }
+      logoPendente = undefined;
+    }
     montarSeletor();
     atualizar();
     sairConfig();

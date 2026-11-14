@@ -197,11 +197,92 @@
     return n.toLocaleString('pt-BR', { minimumFractionDigits: min, maximumFractionDigits: max });
   }
 
+  /* ---------- Meu negócio, numeração e registro de envios ---------- */
+
+  var NOME_PADRAO = 'Mundo 3DI';
+  var LIMITES_NEGOCIO = { nome: 40, whatsapp: 20, instagram: 40, cidade: 40, cnpj: 18, prazo: 40, pagamento: 80, obs: 160 };
+  var VALIDADE_PADRAO = 7;     // dias
+  var MAX_REGISTROS = 2000;
+
+  /* Dados do negócio de uma configuração salva. Texto aparado e limitado; validade em dias (0 = não mostrar). */
+  function lerNegocio(salvo) {
+    var s = salvo && typeof salvo === 'object' ? salvo : {};
+    var n = {};
+    Object.keys(LIMITES_NEGOCIO).forEach(function (k) {
+      n[k] = String(s[k] == null ? '' : s[k]).replace(/\s+/g, ' ').trim().slice(0, LIMITES_NEGOCIO[k]);
+    });
+    n.validadeDias = typeof s.validadeDias === 'number' && isFinite(s.validadeDias) && s.validadeDias >= 0
+      ? Math.min(Math.round(s.validadeDias), 365) : VALIDADE_PADRAO;
+    return n;
+  }
+
+  /* Nº do orçamento com 4 dígitos: 7 -> "0007". */
+  function formatarNumero(n) {
+    var s = String(Math.max(0, Math.floor(Number(n) || 0)));
+    while (s.length < 4) s = '0' + s;
+    return s;
+  }
+
+  function doisDigitos(n) { return (n < 10 ? '0' : '') + n; }
+  function formatarData(d) { return doisDigitos(d.getDate()) + '/' + doisDigitos(d.getMonth() + 1) + '/' + d.getFullYear(); }
+  function somarDias(d, dias) { var x = new Date(d.getTime()); x.setDate(x.getDate() + dias); return x; }
+
+  /*
+   * Tudo o que vai escrito na imagem do orçamento — e só isso. Não recebe custo, margem, perda nem lucro
+   * como campo: o desenho da imagem usa apenas este objeto.
+   * o: { negocio, numero, data (Date), cliente, descricao, material, prazo }
+   */
+  function dadosOrcamento(r, o) {
+    var negocio = lerNegocio(o && o.negocio);
+    var data = o && o.data instanceof Date ? o.data : new Date();
+    function limpa(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max); }
+    var descricao = limpa(o && o.descricao, 120) || (r.qtd > 1 ? r.qtd + ' peças impressas em 3D' : 'Peça impressa em 3D');
+    return {
+      numero: formatarNumero(o && o.numero),
+      data: formatarData(data),
+      validade: negocio.validadeDias > 0 ? formatarData(somarDias(data, negocio.validadeDias)) : '',
+      negocioNome: negocio.nome || NOME_PADRAO,
+      whatsapp: negocio.whatsapp, instagram: negocio.instagram, cidade: negocio.cidade, cnpj: negocio.cnpj,
+      cliente: limpa(o && o.cliente, 60),
+      descricao: descricao,
+      material: limpa(o && o.material, 30),
+      qtd: r.qtd,
+      valorPeca: r.qtd > 1 ? moeda(r.valorUnitario) : '',
+      total: moeda(r.valorCobrar),
+      prazo: limpa(o && o.prazo, LIMITES_NEGOCIO.prazo),
+      pagamento: negocio.pagamento,
+      obs: negocio.obs
+    };
+  }
+
+  /* Registro local de um envio (texto ou imagem). custoTotal e lucro são de uso interno: nunca vão para o cliente. */
+  function novoRegistro(r, o) {
+    function c(n) { return Math.round(n * 100) / 100; }
+    return {
+      n: o.numero,
+      ts: (o.quando instanceof Date ? o.quando : new Date()).toISOString(),
+      formato: o.formato === 'imagem' ? 'imagem' : 'texto',
+      qtd: r.qtd, valorPeca: c(r.valorUnitario), total: c(r.valorCobrar), custoTotal: c(r.custoTotal), lucro: c(r.lucro),
+      material: o.material || '', cliente: o.cliente || '', descricao: o.descricao || ''
+    };
+  }
+
+  /* Acrescenta um registro à lista (guarda no máximo MAX_REGISTROS; os mais antigos saem primeiro). */
+  function adicionarRegistro(lista, reg, max) {
+    var nova = Array.isArray(lista) ? lista.slice() : [];
+    nova.push(reg);
+    var limite = max > 0 ? max : MAX_REGISTROS;
+    return nova.length > limite ? nova.slice(nova.length - limite) : nova;
+  }
+
   /* Texto do orçamento para enviar ao cliente (não revela custo nem margem).
-     opcoes.material: nome do filamento — só entra no texto se vier preenchido (opção "Mostrar filamento no orçamento"). */
+     opcoes.material: nome do filamento — só entra no texto se vier preenchido (opção "Mostrar filamento no orçamento").
+     opcoes.numero: nº do orçamento (inteiro) · opcoes.negocio: nome do negócio (vazio = Mundo 3DI). */
   function textoOrcamento(r, opcoes) {
     var material = opcoes && opcoes.material ? String(opcoes.material).trim() : '';
-    var linhas = ['*Orçamento — Mundo 3DI*'];
+    var negocio = opcoes && opcoes.negocio ? String(opcoes.negocio).trim() : '';
+    var numero = opcoes && opcoes.numero > 0 ? ' Nº ' + formatarNumero(opcoes.numero) : '';
+    var linhas = ['*Orçamento' + numero + ' — ' + (negocio || NOME_PADRAO) + '*'];
     if (r.qtd > 1) {
       linhas.push(r.qtd + ' peças impressas em 3D');
       if (material) linhas.push('Material: ' + material);
@@ -222,7 +303,10 @@
     PESO_ROLO_PADRAO: PESO_ROLO_PADRAO, MAX_MATERIAIS: MAX_MATERIAIS,
     precoKgMaterial: precoKgMaterial, lerMateriais: lerMateriais, lerPesoRolo: lerPesoRolo,
     lerDinheiro: lerDinheiro, lerInteiro: lerInteiro, lerImpressora: lerImpressora, calcularImpressora: calcularImpressora,
-    MAX_HORAS_ANO: MAX_HORAS_ANO
+    MAX_HORAS_ANO: MAX_HORAS_ANO,
+    NOME_PADRAO: NOME_PADRAO, LIMITES_NEGOCIO: LIMITES_NEGOCIO, VALIDADE_PADRAO: VALIDADE_PADRAO, MAX_REGISTROS: MAX_REGISTROS,
+    lerNegocio: lerNegocio, formatarNumero: formatarNumero, formatarData: formatarData,
+    dadosOrcamento: dadosOrcamento, novoRegistro: novoRegistro, adicionarRegistro: adicionarRegistro
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = Calc; }
   root.Calc = Calc;

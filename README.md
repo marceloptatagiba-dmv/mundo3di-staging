@@ -22,6 +22,8 @@ Peso e tempo são os da **mesa inteira** (como o fatiador informa); "Peças na m
 
 **Custo da hora (Simples ou Detalhado):** em Configurações > Custos, o **Simples** é o campo único de sempre (R$ 2,25/h, que já cobre manutenção, depreciação e luz). O **Detalhado** separa energia e desgaste: potência média (W, medida com tomada medidora), tarifa (R$/kWh = total da conta ÷ kWh, com impostos e bandeira), preço da impressora, valor de revenda, vida útil (h), manutenção por ano (R$) e horas impressas por ano. Energia/h = potência ÷ 1000 × tarifa. Desgaste/h = (preço − revenda) ÷ vida útil + manutenção por ano ÷ horas por ano. Hora = energia + desgaste. O app mostra o valor por hora ao vivo e avisa se ficar abaixo do valor do modo Simples. Alternar o modo não apaga nenhum campo, e o modo escolhido vale para todos os orçamentos. No "Ver cálculo", a linha "Impressão" vira "Energia" e "Desgaste da impressora". "Restaurar padrões" não mexe no modo nem nos dados da impressora.
 
+**Orçamento em imagem e numeração:** o botão **Enviar orçamento** abre um painel com **Texto** (envio na hora) e **Imagem**. A imagem é um JPG de 1080 px com logo, dados do negócio, nº do orçamento, data, validade, cliente, descrição da peça, material (só se a opção estiver ligada), quantidade, valor por peça, total, prazo, pagamento e observações. **Nunca mostra custo, margem, perda nem lucro.** Cliente, descrição e prazo são opcionais (o prazo já vem do padrão). Em Configurações > **Meu negócio** ficam logo (reduzido a 400 px no próprio aparelho; sem logo, usa o logo 3Di), nome, WhatsApp, Instagram/site, cidade, CNPJ (opcional), validade (padrão 7 dias; 0 não mostra), prazo, formas de pagamento e observação padrão. A imagem é enviada pelo compartilhamento do celular (Android/Chrome e iPhone com iOS 15 ou mais); sem esse recurso, o JPG é baixado. Funciona sem internet. O número é sequencial **por aparelho** (Nº 0001, 0002…), aparece também no texto do WhatsApp e só avança quando o envio acontece (cancelar o compartilhamento não gasta número). Cada envio grava um **registro local com data e hora** (formato, quantidade, valor por peça, total, custo total e lucro — uso interno, nunca enviados — material, cliente e descrição). Os registros ficam só no aparelho: trocar de celular ou limpar os dados do navegador apaga tudo (guarda os últimos 2.000).
+
 Padrões das configurações: PLA a R$ 150,00 o rolo de 1000 g, hora R$ 2,25/h, perda 5%, preço mínimo R$ 0,00. Cada celular guarda as próprias configurações.
 
 ## Arquivos
@@ -30,7 +32,8 @@ Padrões das configurações: PLA a R$ 150,00 o rolo de 1000 g, hora R$ 2,25/h, 
 |---|---|
 | `index.html` | Telas e visual |
 | `calc.js` | Regras de cálculo, leitura de tempo e texto do orçamento |
-| `app.js` | Funcionamento das telas, configurações salvas, botão copiar, envio do orçamento |
+| `orcamento-img.js` | Desenha o orçamento em imagem (JPG) com logo, em canvas, sem internet; reduz o logo enviado pelo cliente |
+| `app.js` | Funcionamento das telas, configurações salvas, botão copiar, envio do orçamento (texto ou imagem), numeração e registro dos envios |
 | `config-ambiente.js` | Nome do ambiente (produção ou teste), prefixo do cache e chave das configurações salvas |
 | `manifest.webmanifest` | Nome, ícone e cores do app instalado |
 | `sw.js` | Guarda os arquivos no celular para funcionar offline |
