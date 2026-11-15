@@ -215,6 +215,8 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 .resumo .num b{font-size:16px;font-weight:800;overflow-wrap:anywhere}
 .resumo .num span{font-size:11px;font-weight:600;color:var(--suave)}
 .resumo .num.apr b{color:#2F6402}
+.resumo .vendas{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--linha)}
+.resumo .vendas .num b{font-size:18px}
 .dia{margin:6px 2px -2px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--suave)}
 .lista-hist{background:#fff;border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
 .item{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;border:0;border-top:1px solid var(--linha);background:#fff;text-align:left;color:var(--preto)}
@@ -598,6 +600,7 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
           <button class="chip" type="button" data-per="hoje" aria-pressed="false">Hoje</button>
           <button class="chip" type="button" data-per="7" aria-pressed="false">7 dias</button>
           <button class="chip" type="button" data-per="30" aria-pressed="true">30 dias</button>
+          <button class="chip" type="button" data-per="mes" aria-pressed="false">Mês</button>
           <button class="chip" type="button" data-per="tudo" aria-pressed="false">Tudo</button>
         </div>
         <!-- Situação: toque para filtrar, toque de novo para voltar a mostrar todas. Enviado e Vencido = quem aguarda resposta (sem período). -->
@@ -612,6 +615,7 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
           <div class="num"><b id="hist-n">0</b><span>enviados</span></div>
           <div class="num"><b id="hist-total">R$ 0,00</b><span>em orçamentos</span></div>
           <div class="num apr"><b id="hist-apr">0</b><span id="hist-apr-txt">aprovados</span></div>
+          <div class="vendas"><div class="num apr"><span>Vendas aprovadas</span><b id="hist-apr-valor">R$ 0,00</b></div></div>
         </section>
         <!-- Lembrete de backup: aparece com 20 ou mais orçamentos desde o último backup (ou sem backup nenhum) -->
         <div class="faixa-backup" id="hist-lembrete" hidden><p id="hist-lembrete-txt"></p><button type="button" id="hist-lembrete-fazer">Fazer backup</button></div>

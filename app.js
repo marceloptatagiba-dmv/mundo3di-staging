@@ -923,6 +923,8 @@
   /* ---------- Histórico de orçamentos ---------- */
   var LEMBRETE_BACKUP_ATIVO = true;    // faixa de lembrete de backup no topo do histórico (20 ou mais orçamentos desde o último backup)
   var histPeriodo = '30', histSituacao = '', histBusca = '', histLimite = 50, histTimerBusca;
+  var CHAVE_PERIODO = CHAVE + '-periodo';          // período escolhido (vale para a Lista e para o painel de vendas)
+  try { var perSalvo = localStorage.getItem(CHAVE_PERIODO); if (['hoje', '7', '30', 'mes', 'tudo'].indexOf(perSalvo) !== -1) histPeriodo = perSalvo; } catch (e) {}
   var ROTULO_SIT = { enviado: 'Enviado', vencido: 'Vencido', aprovado: 'Aprovado', recusado: 'Recusado' };
   var detChave = null;                 // orçamento aberto no detalhe
 
@@ -939,7 +941,9 @@
     var res = D.resumir(lista);
     $('hist-n').textContent = String(res.qtd);
     $('hist-total').textContent = moeda(res.total);
-    $('hist-apr').textContent = String(res.aprovados);
+    var apr = D.aprovadosDoPeriodo(todos, { periodo: histPeriodo, busca: histBusca, hoje: hoje });   // aprovados pela data da aprovação (a mesma regra do painel de vendas)
+    $('hist-apr').textContent = String(apr.aprovados);
+    $('hist-apr-valor').textContent = moeda(apr.totalAprovados);
     Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.per === histPeriodo));
     });
@@ -1005,7 +1009,11 @@
     histTimerBusca = setTimeout(function () { histBusca = $('hist-busca').value.trim(); histLimite = 50; desenharHist(); }, 150);
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
-    b.addEventListener('click', function () { histPeriodo = b.dataset.per; histLimite = 50; desenharHist(); });
+    b.addEventListener('click', function () {
+      histPeriodo = b.dataset.per; histLimite = 50;
+      try { localStorage.setItem(CHAVE_PERIODO, histPeriodo); } catch (e) {}
+      desenharHist();
+    });
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-sit]'), function (b) {
     b.addEventListener('click', function () { histSituacao = histSituacao === b.dataset.sit ? '' : b.dataset.sit; histLimite = 50; desenharHist(); });
