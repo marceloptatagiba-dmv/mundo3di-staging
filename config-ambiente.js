@@ -7,7 +7,7 @@
   root.AMBIENTE_3DI = {
     nome: 'teste',
     prefixoCache: 'calc3di-teste',
-    versao: '0.4.1-teste.1',   // MAJOR.MINOR.PATCH-teste.N: o N sobe a cada publicação no staging; na produção vale o mesmo número sem o sufixo
+    versao: '0.4.2-teste.1',   // MAJOR.MINOR.PATCH-teste.N: o N sobe a cada publicação no staging; na produção vale o mesmo número sem o sufixo
     chaveConfig: 'mundo3di-teste-config',
     extraCache: ['testes.html', 'testes-casos.js']
   };

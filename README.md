@@ -50,7 +50,7 @@ O app precisa estar num endereço **https** para poder ser instalado e funcionar
 
 **Netlify Drop (mais simples)**
 1. Acesse https://app.netlify.com/drop e entre com uma conta gratuita.
-2. Arraste a pasta `calculadora-3di` inteira para a página.
+2. Arraste a pasta do app inteira para a página.
 3. Use o endereço gerado (dá para trocar o nome em *Site configuration*).
 
 **GitHub Pages**
@@ -67,7 +67,7 @@ O que muda entre os dois fica só em `config-ambiente.js`, `manifest.webmanifest
 1. Monte o ambiente numa pasta limpa: `bash ambientes/montar.sh staging <pasta>` (ou `producao`).
 2. Publique o conteúdo dessa pasta no repositório do ambiente (staging primeiro).
 3. Teste no celular em `…/orcamentador-3di-staging/testes.html` e no orçamentador.
-4. Aprovado, monte `producao` e publique no repositório `calculadora-3di`. Nunca copie o `config-ambiente.js` de um ambiente para o outro.
+4. Aprovado, monte `producao` e publique no repositório `orcamentador-3di` (produção; antes se chamava `calculadora-3di`). Nunca copie o `config-ambiente.js` de um ambiente para o outro.
 
 ## Instalar no celular
 
