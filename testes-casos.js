@@ -635,6 +635,89 @@
     var restCat = D.restaurarDados({ config: cfgBackup, contador: 1, registros: [], catalogo: dois2 }, bkCat.backup.dados);
     igual('restaurar: o catálogo do backup substitui o do aparelho; desfazer devolve o antigo', restCat.catalogo.length + '|' + D.desfazerRestauracao(restCat, { em: catQuando.toISOString(), dados: { config: cfgBackup, contador: 1, registros: [], catalogo: dois2 } }).catalogo.length, '1|2');
 
+
+    /* ---- v5 · painel de vendas: resumoVendas, período Mês e aprovados pela data da aprovação ---- */
+    function pvVenda(n, diasEnvio, diasAprov, total, lucro, cli, desc, extra) {
+      return mkReg(n, diasEnvio, Object.assign({ status: 'aprovado', statusEm: em(diasAprov).toISOString(), total: total, lucro: lucro, custoTotal: total - lucro, cliente: cli, descricao: desc }, extra || {}));
+    }
+    var pvVendas = [
+      pvVenda(40, 29, 28, 148.50, 74.25, 'Loja Geek Point', 'Suporte de celular'),
+      pvVenda(41, 26, 25, 96.00, 48.00, 'Carla Mendes', 'Chaveiro 3Di'),
+      pvVenda(42, 24, 23, 312.80, 156.40, 'Ana Souza', 'Suporte de fone'),
+      pvVenda(43, 22, 21, 87.40, 43.70, '', 'Chaveiro 3Di'),
+      pvVenda(44, 19, 18, 420.00, 210.00, 'Loja Geek Point', 'Suporte de celular'),
+      pvVenda(45, 17, 16, 134.60, 67.30, 'Rafael Lima', 'Vaso geométrico'),
+      pvVenda(46, 15, 14, 265.00, 132.50, 'Ana Souza', 'Suporte de fone'),
+      pvVenda(47, 12, 11, 188.70, 94.35, 'Carla Mendes', 'Chaveiro 3Di'),
+      pvVenda(48, 9, 8, 74.30, 37.15, '', 'Vaso geométrico'),
+      pvVenda(49, 5, 4, 389.00, 194.50, 'Loja Geek Point', 'Suporte de celular'),
+      pvVenda(50, 2, 1, 370.00, 155.75, 'Ana Souza', 'Suporte de fone')
+    ];
+    var pvAntes = [pvVenda(20, 41, 40, 1500, 750, 'Ana Souza', 'Suporte de fone'), pvVenda(21, 34, 33, 601.10, 300, 'Carla Mendes', 'Chaveiro 3Di'), pvVenda(19, 61, 60, 999, 500, 'Antigo', 'Vaso geométrico')];
+    var pvEspera = [[0, 14, 138], [1, 10, 156.40], [2, 8, 172], [3, 6, 188.20], [4, 5, 62.40], [5, 3, 485], [6, 1, 214], [7, 0, 96.40]].map(function (t) { return mkReg(60 + t[0], t[1], { total: t[2], validadeAte: '2026-11-21' }); });
+    var pvVencidos = [mkReg(70, 20, { total: 200, validadeAte: '2026-11-10' }), mkReg(71, 25, { total: 150.20, validadeAte: '2026-11-01' }), mkReg(72, 9, { total: 116, validadeAte: '2026-11-13' })];
+    var pvRecusados = [mkReg(73, 6, { total: 129, status: 'recusado', statusEm: em(5).toISOString() }), mkReg(74, 3, { total: 50, status: 'recusado', statusEm: em(2).toISOString() })];
+    var pvTodos = [].concat(pvVendas, pvAntes, pvEspera, pvVencidos, pvRecusados);
+    var pv30 = D.resumoVendas(pvTodos, '30', hojeH);
+    igual('painel 30 dias: vendas, quantidade e ticket médio', [pv30.vendas, pv30.qtd, pv30.ticket].join('|'), '2486.3|11|226.03');
+    igual('painel 30 dias: lucro, custo e margem real', [pv30.lucro, pv30.custo, pv30.margemReal].join('|'), '1213.9|1272.4|48.8');
+    igual('painel 30 dias: período anterior e variação (+18,3%)', [pv30.anterior.vendas, pv30.anterior.qtd, pv30.variacao].join('|'), '2101.1|2|18.3');
+    igual('painel: aguardando (8, R$ 1.512,40, 3 com 7 dias ou mais) e vencidos (3, R$ 466,20)', [pv30.aguardando.qtd, pv30.aguardando.total, pv30.aguardando.antigos, pv30.vencidos.qtd, pv30.vencidos.total].join('|'), '8|1512.4|3|3|466.2');
+    igual('painel: recusados e enviados não entram nas vendas', pv30.qtd, 11);
+    igual('painel: mais vendidos por cliente (Sem cliente entra pelo valor)', pv30.topClientes.map(function (x) { return x.nome + ':' + x.valor + ':' + x.qtd; }).join('|'),
+      'Loja Geek Point:957.5:3|Ana Souza:947.8:3|Carla Mendes:284.7:2|Sem cliente:161.7:2|Rafael Lima:134.6:1');
+    igual('painel: mais vendidos por peça', pv30.topPecas.map(function (x) { return x.nome + ':' + x.valor + ':' + x.qtd; }).join('|'),
+      'Suporte de celular:957.5:3|Suporte de fone:947.8:3|Chaveiro 3Di:372.1:3|Vaso geométrico:208.9:2');
+    var pvSoma = 0, pvDiasComVenda = 0;
+    pv30.porDia.forEach(function (x) { pvSoma += Math.round(x.valor * 100); if (x.qtd) pvDiasComVenda++; });
+    igual('painel 30 dias: 30 barras, de 16/10 a 14/11, somando as vendas', pv30.porDia.length + '|' + pv30.porDia[0].chave + '|' + pv30.porDia[29].chave + '|' + pvSoma / 100 + '|' + pvDiasComVenda, '30|2026-10-16|2026-11-14|2486.3|11');
+    igual('painel: barra do dia (Sex, 13/11 = R$ 370,00)', pv30.porDia[28].rotulo + '|' + pv30.porDia[28].valor + '|' + pv30.porDia[29].valor, 'Sex, 13/11|370|0');
+    var pvHoje = D.resumoVendas(pvTodos, 'hoje', hojeH);
+    igual('painel Hoje: sem vendas, sem variação, sem série; aguardando continua', [pvHoje.vendas, pvHoje.qtd, pvHoje.ticket, pvHoje.variacao, pvHoje.anterior, pvHoje.porDia.length, pvHoje.aguardando.qtd, pvHoje.vencidos.qtd].join('|'), '0|0|0|||0|8|3');
+    var pv7 = D.resumoVendas(pvTodos, '7', hojeH);
+    igual('painel 7 dias: 10/11 e 13/11, 7 barras, variação contra 01–07/11', [pv7.vendas, pv7.qtd, pv7.porDia.length, pv7.anterior.vendas, pv7.variacao].join('|'), '759|2|7|263|188.6');
+    var pvMes = D.resumoVendas(pvTodos, 'mes', hojeH);
+    igual('painel Mês: 1–14/11, 14 barras, variação contra 1–14/10', [pvMes.vendas, pvMes.qtd, pvMes.porDia.length, pvMes.anterior.vendas, pvMes.variacao].join('|'), '1022|4|14|2101.1|-51.4');
+    var pvTudo = D.resumoVendas(pvTodos, 'tudo', hojeH);
+    igual('painel Tudo: por mês (set, out, nov), sem variação', [pvTudo.vendas, pvTudo.qtd, pvTudo.variacao, pvTudo.porDia.map(function (x) { return x.rotulo + '=' + x.valor + '/' + x.qtd; }).join(',')].join('|'),
+      '5586.4|14||set/2026=999/1,out/2026=3565.4/9,nov/2026=1022/4');
+    igual('painel: período inválido volta para 30 dias', D.resumoVendas(pvTodos, 'xyz', hojeH).periodo + '|' + D.resumoVendas(pvTodos, undefined, hojeH).vendas, '30|2486.3');
+    igual('painel: a venda vale na data da aprovação (enviado em 30/10, aprovado em 03/11 = venda de novembro)',
+      D.resumoVendas([pvVenda(90, 15, 11, 100, 40, 'X', 'Y')], 'mes', hojeH).vendas + '|' + D.resumoVendas([pvVenda(90, 15, 11, 100, 40, 'X', 'Y')], '7', hojeH).vendas, '100|0');
+    igual('painel: aprovado sem statusEm entra pela data do envio', D.resumoVendas([mkReg(91, 2, { status: 'aprovado', total: 50 })], '7', hojeH).vendas + '|' + D.resumoVendas([mkReg(91, 20, { status: 'aprovado', total: 50 })], '7', hojeH).vendas, '50|0');
+    igual('painel: borda dos 30 dias (29 dias atrás entra, 30 não)', D.resumoVendas([pvVenda(92, 30, 29, 10, 5, '', ''), pvVenda(93, 31, 30, 20, 10, '', '')], '30', hojeH).vendas, 10);
+    igual('painel: aprovado que voltou para enviado sai das vendas e passa a aguardar', (function () {
+      var l = D.atualizarRegistro([pvVenda(94, 3, 2, 80, 40, '', '')], D.chaveRegistro(pvVenda(94, 3, 2, 80, 40, '', '')), { status: 'enviado' });
+      var r = D.resumoVendas(l, '30', hojeH); return r.vendas + '|' + r.aguardando.qtd + '|' + r.aguardando.total;
+    })(), '0|1|80');
+    igual('painel: soma em centavos (0,10 + 0,20 = 0,30)', D.resumoVendas([pvVenda(95, 1, 0, 0.1, 0.05, '', ''), pvVenda(96, 1, 0, 0.2, 0.1, '', '')], 'hoje', hojeH).vendas, 0.3);
+    igual('painel: lucro negativo (vendeu abaixo do custo) entra na soma', D.resumoVendas([pvVenda(97, 1, 0, 10, -2, '', '')], 'hoje', hojeH).lucro + '|' + D.resumoVendas([pvVenda(97, 1, 0, 10, -2, '', '')], 'hoje', hojeH).margemReal, '-2|-20');
+    var pvVazio = D.resumoVendas([], '30', hojeH);
+    igual('painel: lista vazia dá tudo zero, 30 barras zeradas, sem erro', [pvVazio.vendas, pvVazio.qtd, pvVazio.ticket, pvVazio.lucro, pvVazio.margemReal, pvVazio.variacao, pvVazio.porDia.length, pvVazio.topClientes.length, pvVazio.topPecas.length, pvVazio.aguardando.qtd, pvVazio.vencidos.qtd].join('|'), '0|0|0|0|0||30|0|0|0|0');
+    igual('painel: entrada que não é lista não quebra', D.resumoVendas(null, '30', hojeH).qtd + '|' + D.resumoVendas('x', 'tudo', hojeH).porDia.length, '0|0');
+    igual('painel: peças agrupam por catalogoId e, sem ele, pela descrição sem acento e maiúscula', (function () {
+      var l = [pvVenda(100, 1, 0, 10, 5, '', 'Vaso Geométrico', { catalogoId: 'p1' }), pvVenda(101, 1, 0, 20, 10, '', 'vaso geometrico (grande)', { catalogoId: 'p1' }),
+               pvVenda(102, 2, 1, 5, 2, '', 'Chaveiro'), pvVenda(103, 2, 1, 6, 3, '', 'CHAVEIRO'), pvVenda(104, 2, 1, 7, 3, '', '')];
+      return D.resumoVendas(l, '7', hojeH).topPecas.map(function (x) { return x.nome + ':' + x.valor + ':' + x.qtd; }).join('|');
+    })(), 'Vaso Geométrico:30:2|Chaveiro:11:2|Sem descrição:7:1');
+    igual('painel: clientes iguais com acento ou caixa diferente viram um só', D.resumoVendas([pvVenda(105, 1, 0, 10, 5, 'José', 'A'), pvVenda(106, 1, 0, 10, 5, 'JOSE', 'A')], 'hoje', hojeH).topClientes.length, 1);
+    igual('painel: só os 5 primeiros em mais vendidos', D.resumoVendas([1, 2, 3, 4, 5, 6, 7].map(function (i) { return pvVenda(110 + i, 1, 0, i, i / 2, 'Cliente ' + i, 'Peça ' + i); }), 'hoje', hojeH).topClientes.map(function (x) { return x.nome; }).join(','), 'Cliente 7,Cliente 6,Cliente 5,Cliente 4,Cliente 3');
+    igual('período anterior do Mês: mês mais curto vai até o último dia dele; janeiro usa dezembro', (function () {
+      var a = D.periodoAnterior('mes', new Date(2026, 2, 31, 9)), b = D.periodoAnterior('mes', new Date(2026, 0, 15, 9));
+      return D.dataISO(a.inicio) + '/' + D.dataISO(a.fim) + '|' + D.dataISO(b.inicio) + '/' + D.dataISO(b.fim);
+    })(), '2026-02-01/2026-03-01|2025-12-01/2025-12-16');
+    igual('período anterior: Hoje e Tudo não têm', D.periodoAnterior('hoje', hojeH) + '|' + D.periodoAnterior('tudo', hojeH), 'null|null');
+    igual('período Mês no histórico: do dia 1º até hoje', ids(D.filtrarRegistros([mkReg(1, 13), mkReg(2, 14)], { periodo: 'mes', hoje: hojeH })), '1');
+    // cartão da Lista: aprovados pela data da aprovação (e pela busca), enviados e total pela data do envio
+    var pvCartao = D.aprovadosDoPeriodo(pvVendas.concat(pvEspera), { periodo: '30', hoje: hojeH });
+    igual('cartão da Lista: aprovados e valor aprovado em 30 dias', pvCartao.aprovados + '|' + pvCartao.totalAprovados, '11|2486.3');
+    igual('cartão da Lista: aprovado agora entra mesmo que o envio tenha sido antes do período', D.aprovadosDoPeriodo([pvVenda(120, 40, 1, 100, 50, '', '')], { periodo: '7', hoje: hojeH }).aprovados + '|' + D.resumir(D.filtrarRegistros([pvVenda(120, 40, 1, 100, 50, '', '')], { periodo: '7', hoje: hojeH })).qtd, '1|0');
+    igual('cartão da Lista: a busca vale também para os aprovados', D.aprovadosDoPeriodo(pvVendas, { periodo: 'tudo', busca: 'ANA', hoje: hojeH }).totalAprovados + '|' + D.aprovadosDoPeriodo(pvVendas, { periodo: 'tudo', busca: 'zzz', hoje: hojeH }).aprovados, '947.8|0');
+    // 2.000 registros: uma passada
+    var pvMuitos = []; for (var pvI = 0; pvI < 2000; pvI++) pvMuitos.push(pvVenda(1000 + pvI, pvI % 60 + 1, pvI % 60, 10 + (pvI % 7), 5, 'Cliente ' + (pvI % 13), 'Peça ' + (pvI % 9)));
+    var pvT0 = Date.now(), pvM = D.resumoVendas(pvMuitos, 'tudo', hojeH);
+    igual('painel: 2.000 registros em menos de 1 segundo', pvM.qtd + '|' + (Date.now() - pvT0 < 1000), '2000|true');
+
     return resultados;
   }
 

@@ -14,6 +14,9 @@
   var MAX_ARQUIVO_BACKUP = 20 * 1024 * 1024;   // bytes: acima disso o arquivo não é lido
   var DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   var ISO_DATA = /^\d{4}-\d{2}-\d{2}$/;
+  var MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  var DIAS_ANTIGO = 7;                   // orçamento aguardando resposta há 7 dias ou mais
+  var MAX_TOP = 5;                       // itens em "Mais vendidos"
 
   /* ---------- utilitários ---------- */
   function dois(n) { return (n < 10 ? '0' : '') + n; }
@@ -201,12 +204,13 @@
     return t.replace(/\s+/g, ' ').trim();
   }
 
-  /* periodo: 'hoje' | '7' | '30' | 'tudo'. Dias contados com o de hoje (7 dias = hoje e os 6 anteriores). */
+  /* periodo: 'hoje' | '7' | '30' | 'mes' | 'tudo'. Dias contados com o de hoje (7 dias = hoje e os 6 anteriores); 'mes' = do dia 1º do mês até hoje. */
   function inicioDoPeriodo(periodo, hoje) {
     var h = inicioDoDia(hoje || new Date());
     if (periodo === 'hoje') return h;
     if (periodo === '7') return somarDias(h, -6);
     if (periodo === '30') return somarDias(h, -29);
+    if (periodo === 'mes') return new Date(h.getFullYear(), h.getMonth(), 1);
     return null;
   }
 
@@ -259,6 +263,124 @@
       atual.itens.push(r);
     });
     return grupos;
+  }
+
+  /* ---------- painel de vendas (v5) ---------- */
+
+  /* Data em que a venda aconteceu: a da aprovação (statusEm). Aprovado sem statusEm usa a data do envio. */
+  function dataDaVenda(reg) { return dataValida(reg.statusEm) ? new Date(reg.statusEm) : new Date(reg.ts); }
+  function dentro(d, ini, fim) { var t = d.getTime(); return (!ini || t >= ini.getTime()) && (!fim || t < fim.getTime()); }
+  function centavos(n) { return Math.round((typeof n === 'number' && isFinite(n) ? n : 0) * 100); }
+  function diasDesde(ts, hoje) { return Math.round((inicioDoDia(hoje || new Date()).getTime() - inicioDoDia(new Date(ts)).getTime()) / 86400000); }
+
+  /* Intervalo [inicio, fim) do período anterior, de mesmo tamanho. Hoje e Tudo não têm comparação (null).
+     Mês compara o mesmo trecho do mês anterior (1–14/11 com 1–14/10; mês mais curto: vai até o último dia dele). */
+  function periodoAnterior(periodo, hoje) {
+    var h = inicioDoDia(hoje || new Date()), ini = inicioDoPeriodo(periodo, h);
+    if (periodo === '7' || periodo === '30') return { inicio: somarDias(ini, periodo === '7' ? -7 : -30), fim: ini };
+    if (periodo === 'mes') {
+      var a = new Date(ini.getFullYear(), ini.getMonth() - 1, 1);
+      var diasDoMes = new Date(a.getFullYear(), a.getMonth() + 1, 0).getDate();
+      return { inicio: a, fim: new Date(a.getFullYear(), a.getMonth(), Math.min(h.getDate(), diasDoMes) + 1) };
+    }
+    return null;
+  }
+
+  /* Aprovados com a data da venda dentro do período (e, se houver, que combinem com a busca). Usado pelo cartão da Lista. */
+  function aprovadosDoPeriodo(regs, f) {
+    f = f || {};
+    var h0 = inicioDoDia(f.hoje || new Date()), fim = somarDias(h0, 1);
+    var ini = inicioDoPeriodo(f.periodo === undefined ? '30' : f.periodo, f.hoje), q = normalizarBusca(f.busca);
+    var cent = 0, qtd = 0;
+    (Array.isArray(regs) ? regs : []).forEach(function (r) {
+      if (r.status !== 'aprovado' || !dentro(dataDaVenda(r), ini, fim)) return;
+      if (q && normalizarBusca([r.cliente, r.descricao, numero4(r.n), r.n].join(' ')).indexOf(q) === -1) return;
+      cent += centavos(r.total); qtd++;
+    });
+    return { aprovados: qtd, totalAprovados: cent / 100 };
+  }
+
+  /* Série de barras: por dia (7, 30 e mês) ou por mês (tudo). Hoje não tem série. */
+  function serieVendas(vendas, periodo, ini, h0) {
+    var mapa = {}, itens = [], d;
+    if (periodo === 'hoje') return itens;
+    function somar(chave, v) { var x = mapa[chave] || (mapa[chave] = { cent: 0, qtd: 0 }); x.cent += centavos(v.total); x.qtd++; }
+    if (periodo === 'tudo') {
+      if (!vendas.length) return itens;
+      vendas.forEach(function (v) { var d2 = dataDaVenda(v); somar(d2.getFullYear() + '-' + dois(d2.getMonth() + 1), v); });
+      var primeira = vendas.reduce(function (m, v) { var t = dataDaVenda(v).getTime(); return t < m ? t : m; }, Infinity);
+      var pd = new Date(primeira);
+      for (d = new Date(pd.getFullYear(), pd.getMonth(), 1); d.getTime() <= h0.getTime(); d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+        var ch = d.getFullYear() + '-' + dois(d.getMonth() + 1), x = mapa[ch] || { cent: 0, qtd: 0 };
+        itens.push({ chave: ch, rotulo: MESES[d.getMonth()] + '/' + d.getFullYear(), valor: x.cent / 100, qtd: x.qtd });
+      }
+      return itens;
+    }
+    vendas.forEach(function (v) { somar(dataISO(dataDaVenda(v)), v); });
+    for (d = new Date(ini.getTime()); d.getTime() <= h0.getTime(); d = somarDias(d, 1)) {
+      var c = dataISO(d), y = mapa[c] || { cent: 0, qtd: 0 };
+      itens.push({ chave: c, rotulo: DIAS_SEMANA[d.getDay()] + ', ' + dois(d.getDate()) + '/' + dois(d.getMonth() + 1), valor: y.cent / 100, qtd: y.qtd });
+    }
+    return itens;
+  }
+
+  /* Top MAX_TOP por valor aprovado. chaveNome(reg) -> { chave, nome } ; vendas em ordem do mais recente (o nome vem do mais recente que tiver um). */
+  function ranking(vendas, chaveNome, nomeVazio) {
+    var grupos = {}, ordem = [];
+    vendas.forEach(function (v) {
+      var k = chaveNome(v), g = grupos[k.chave];
+      if (!g) { g = grupos[k.chave] = { nome: '', cent: 0, qtd: 0 }; ordem.push(g); }
+      if (!g.nome && k.nome) g.nome = k.nome;
+      g.cent += centavos(v.total); g.qtd++;
+    });
+    ordem.sort(function (a, b) { return b.cent - a.cent || b.qtd - a.qtd || String(a.nome || nomeVazio).localeCompare(String(b.nome || nomeVazio), 'pt'); });
+    return ordem.slice(0, MAX_TOP).map(function (g) { return { nome: g.nome || nomeVazio, qtd: g.qtd, valor: g.cent / 100 }; });
+  }
+
+  /*
+   * Painel de vendas. periodo: 'hoje' | '7' | '30' | 'mes' | 'tudo'. Valores em reais (somas em centavos inteiros).
+   *  - Vendas, lucro, séries e rankings: orçamentos aprovados com a data da aprovação dentro do período.
+   *  - Aguardando e vencidos: situação de agora, sem período.
+   *  - variacao (%) contra o período anterior de mesmo tamanho; null em Hoje e Tudo ou quando o anterior não vendeu.
+   */
+  function resumoVendas(regs, periodo, hoje) {
+    var lista = Array.isArray(regs) ? regs : [];
+    var per = ['hoje', '7', '30', 'mes', 'tudo'].indexOf(periodo) !== -1 ? periodo : '30';
+    var h0 = inicioDoDia(hoje || new Date()), fim = somarDias(h0, 1), ini = inicioDoPeriodo(per, h0);
+    var vendas = lista.filter(function (r) { return r.status === 'aprovado' && dentro(dataDaVenda(r), ini, fim); });
+    vendas.sort(function (a, b) { return dataDaVenda(b).getTime() - dataDaVenda(a).getTime(); });
+    var cent = 0, lucro = 0;
+    vendas.forEach(function (r) { cent += centavos(r.total); lucro += centavos(r.lucro); });
+    var qtd = vendas.length;
+
+    var ant = periodoAnterior(per, h0), anterior = null, variacao = null;
+    if (ant) {
+      var ac = 0, aq = 0;
+      lista.forEach(function (r) { if (r.status === 'aprovado' && dentro(dataDaVenda(r), ant.inicio, ant.fim)) { ac += centavos(r.total); aq++; } });
+      anterior = { vendas: ac / 100, qtd: aq };
+      if (ac > 0) variacao = Math.round((cent - ac) / ac * 1000) / 10;
+    }
+
+    var ag = { qtd: 0, cent: 0, antigos: 0 }, ve = { qtd: 0, cent: 0 };
+    lista.forEach(function (r) {
+      var st = situacao(r, hoje || new Date());
+      if (st === 'enviado') { ag.qtd++; ag.cent += centavos(r.total); if (diasDesde(r.ts, h0) >= DIAS_ANTIGO) ag.antigos++; }
+      else if (st === 'vencido') { ve.qtd++; ve.cent += centavos(r.total); }
+    });
+
+    return {
+      periodo: per, qtd: qtd, vendas: cent / 100, ticket: qtd ? Math.round(cent / qtd) / 100 : 0,
+      lucro: lucro / 100, custo: (cent - lucro) / 100, margemReal: cent > 0 ? Math.round(lucro / cent * 1000) / 10 : 0,
+      anterior: anterior, variacao: variacao,
+      porDia: serieVendas(vendas, per, ini, h0),
+      topClientes: ranking(vendas, function (v) { var n = limparTexto(v.cliente, 60); return { chave: normalizarBusca(n), nome: n }; }, 'Sem cliente'),
+      topPecas: ranking(vendas, function (v) {
+        var n = limparTexto(v.descricao, 120);
+        return { chave: v.catalogoId ? 'c:' + v.catalogoId : 'd:' + normalizarBusca(n), nome: n };
+      }, 'Sem descrição'),
+      aguardando: { qtd: ag.qtd, total: ag.cent / 100, antigos: ag.antigos },
+      vencidos: { qtd: ve.qtd, total: ve.cent / 100 }
+    };
   }
 
   function hora(ts) { var d = new Date(ts); return dois(d.getHours()) + ':' + dois(d.getMinutes()); }
@@ -655,6 +777,7 @@
     novoRegistro: novoRegistro, adicionarRegistro: adicionarRegistro, lerRegistro: lerRegistro, lerRegistros: lerRegistros,
     chaveRegistro: chaveRegistro, atualizarRegistro: atualizarRegistro, excluirRegistro: excluirRegistro,
     situacao: situacao, normalizarBusca: normalizarBusca, filtrarRegistros: filtrarRegistros, resumir: resumir,
+    DIAS_ANTIGO: DIAS_ANTIGO, MAX_TOP: MAX_TOP, resumoVendas: resumoVendas, aprovadosDoPeriodo: aprovadosDoPeriodo, periodoAnterior: periodoAnterior, dataDaVenda: dataDaVenda,
     agruparPorDia: agruparPorDia, hora: hora, descreverEnvio: descreverEnvio, validadeCurta: validadeCurta,
     ultimosClientes: ultimosClientes, materialDoRegistro: materialDoRegistro, materialParaEnvio: materialParaEnvio,
     descricaoLinha: descricaoLinha, orcamentoDeRegistro: orcamentoDeRegistro, precisaLembreteBackup: precisaLembreteBackup,
