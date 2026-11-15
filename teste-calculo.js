@@ -32,7 +32,9 @@ if (stg) {
   igual('ambiente: staging sem versaoCache antigo', stg.versaoCache, undefined);
 }
 if (prod && stg) {
-  igual('ambiente: staging maior ou igual à produção', C.compararVersoes(stg.versao, prod.versao) >= 0, true);
+  // compara só MAJOR.MINOR.PATCH: pelo semver 0.5.0-teste.4 vem antes de 0.5.0, mas é a mesma versão-alvo
+  var base = function (v) { return String(v).replace(/-teste\.\d+$/, ''); };
+  igual('ambiente: staging maior ou igual à produção (sem o sufixo -teste.N)', C.compararVersoes(base(stg.versao), base(prod.versao)) >= 0, true);
   igual('ambiente: prefixos e chaves diferentes', (prod.prefixoCache !== stg.prefixoCache) + '|' + (prod.chaveConfig !== stg.chaveConfig), 'true|true');
 }
 igual('sw: nome do cache vem do config deste ambiente', rodarSw(raiz).VERSAO, raiz.prefixoCache + '-v' + raiz.versao);
