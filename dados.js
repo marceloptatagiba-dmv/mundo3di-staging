@@ -4,6 +4,7 @@
 
   var MAX_REGISTROS = 2000;
   var SITUACOES = ['enviado', 'aprovado', 'recusado'];
+  var SITUACOES_FILTRO = ['enviado', 'vencido', 'aprovado', 'recusado'];   // chips de situação no histórico (vencido é calculado)
   var MAX_CORES = 8;
   var ATALHOS_MARGEM = [70, 80, 90, 100];
   var LIMITE_LEMBRETE_BACKUP = 20;       // orçamentos desde o último backup (a faixa de lembrete aparece só no Histórico)
@@ -215,24 +216,48 @@
   }
 
   /*
-   * Filtra por período e busca (cliente, peça ou nº) e ordena do mais novo para o mais antigo.
-   * f: { periodo (padrão '30'), busca, hoje (Date) }
+   * Filtra por período, situação e busca (cliente, peça ou nº). Do mais novo para o mais antigo.
+   * f: { periodo (padrão '30'), situacao ('enviado' | 'vencido' | 'aprovado' | 'recusado'; vazio = todas), busca, hoje (Date) }
+   * Com situação:
+   *  - enviado e vencido (aguardando resposta) ignoram o período e saem do mais antigo para o mais novo: é a fila de quem cobrar;
+   *  - aprovado e recusado usam a data da resposta (a mesma regra do painel de vendas), mas a lista continua mostrando a hora do envio.
    */
   function filtrarRegistros(regs, f) {
     f = f || {};
-    var inicio = inicioDoPeriodo(f.periodo === undefined ? '30' : f.periodo, f.hoje);
+    var sit = SITUACOES_FILTRO.indexOf(f.situacao) !== -1 ? f.situacao : '';
+    var espera = sit === 'enviado' || sit === 'vencido';
+    var inicio = espera ? null : inicioDoPeriodo(f.periodo === undefined ? '30' : f.periodo, f.hoje);
+    var fim = sit && !espera ? somarDias(inicioDoDia(f.hoje || new Date()), 1) : null;
     var q = normalizarBusca(f.busca);
     var saida = (Array.isArray(regs) ? regs : []).filter(function (r) {
-      if (inicio && new Date(r.ts).getTime() < inicio.getTime()) return false;
+      if (sit && situacao(r, f.hoje) !== sit) return false;
+      var quando = sit && !espera ? dataDaVenda(r) : new Date(r.ts);
+      if (!dentro(quando, inicio, fim)) return false;
       if (!q) return true;
       var palheiro = normalizarBusca([r.cliente, r.descricao, numero4(r.n), r.n].join(' '));
       return palheiro.indexOf(q) !== -1;
     });
     saida.sort(function (a, b) {
       var d = new Date(b.ts).getTime() - new Date(a.ts).getTime();
-      return d !== 0 ? d : b.n - a.n;
+      if (d === 0) d = b.n - a.n;
+      return espera ? -d : d;
     });
     return saida;
+  }
+
+  /* Quantos orçamentos aguardam resposta e quantos venceram (sem período), para as contagens dos chips. */
+  function contarSituacoes(regs, hoje) {
+    var c = { enviado: 0, vencido: 0 };
+    (Array.isArray(regs) ? regs : []).forEach(function (r) { var st = situacao(r, hoje); if (st === 'enviado' || st === 'vencido') c[st]++; });
+    return c;
+  }
+
+  /* Texto da etiqueta de quem aguarda resposta: "hoje", "há 1 dia", "há 14 dias" (âmbar a partir de DIAS_ANTIGO) · vencido: "venceu 10/11". */
+  function textoEspera(reg, hoje) {
+    var st = situacao(reg, hoje);
+    if (st === 'vencido') return { texto: 'venceu ' + validadeCurta(reg.validadeAte, hoje), antigo: true };
+    var d = diasDesde(reg.ts, hoje);
+    return { texto: d <= 0 ? 'hoje' : d === 1 ? 'há 1 dia' : 'há ' + d + ' dias', antigo: d >= DIAS_ANTIGO };
   }
 
   /* Resumo da lista: enviados (todos), soma dos totais e aprovados (quantidade e soma). Soma em centavos inteiros. */
@@ -777,6 +802,7 @@
     novoRegistro: novoRegistro, adicionarRegistro: adicionarRegistro, lerRegistro: lerRegistro, lerRegistros: lerRegistros,
     chaveRegistro: chaveRegistro, atualizarRegistro: atualizarRegistro, excluirRegistro: excluirRegistro,
     situacao: situacao, normalizarBusca: normalizarBusca, filtrarRegistros: filtrarRegistros, resumir: resumir,
+    SITUACOES_FILTRO: SITUACOES_FILTRO, contarSituacoes: contarSituacoes, textoEspera: textoEspera,
     DIAS_ANTIGO: DIAS_ANTIGO, MAX_TOP: MAX_TOP, resumoVendas: resumoVendas, aprovadosDoPeriodo: aprovadosDoPeriodo, periodoAnterior: periodoAnterior, dataDaVenda: dataDaVenda,
     agruparPorDia: agruparPorDia, hora: hora, descreverEnvio: descreverEnvio, validadeCurta: validadeCurta,
     ultimosClientes: ultimosClientes, materialDoRegistro: materialDoRegistro, materialParaEnvio: materialParaEnvio,

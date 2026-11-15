@@ -922,7 +922,8 @@
 
   /* ---------- Histórico de orçamentos ---------- */
   var LEMBRETE_BACKUP_ATIVO = true;    // faixa de lembrete de backup no topo do histórico (20 ou mais orçamentos desde o último backup)
-  var histPeriodo = '30', histBusca = '', histLimite = 50, histTimerBusca;
+  var histPeriodo = '30', histSituacao = '', histBusca = '', histLimite = 50, histTimerBusca;
+  var ROTULO_SIT = { enviado: 'Enviado', vencido: 'Vencido', aprovado: 'Aprovado', recusado: 'Recusado' };
   var detChave = null;                 // orçamento aberto no detalhe
 
   function el(tag, cls, txt) {
@@ -933,7 +934,8 @@
   }
   function desenharHist() {
     var todos = lerLista(), hoje = new Date();
-    var lista = D.filtrarRegistros(todos, { periodo: histPeriodo, busca: histBusca, hoje: hoje });
+    var espera = histSituacao === 'enviado' || histSituacao === 'vencido';   // fila de quem aguarda resposta: sem período, do mais antigo para o mais novo
+    var lista = D.filtrarRegistros(todos, { periodo: histPeriodo, situacao: histSituacao, busca: histBusca, hoje: hoje });
     var res = D.resumir(lista);
     $('hist-n').textContent = String(res.qtd);
     $('hist-total').textContent = moeda(res.total);
@@ -941,6 +943,20 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.per === histPeriodo));
     });
+    var cont = D.contarSituacoes(todos, hoje);
+    Array.prototype.forEach.call(document.querySelectorAll('[data-sit]'), function (b) {
+      var st = b.dataset.sit;
+      b.setAttribute('aria-pressed', String(st === histSituacao));
+      b.textContent = ROTULO_SIT[st] + (cont[st] ? ' ' + cont[st] : '');
+    });
+    $('hist-per').hidden = espera;
+    $('hist-resumo').hidden = !!histSituacao;
+    var resSit = $('hist-sit-resumo');
+    resSit.hidden = !histSituacao;
+    if (histSituacao) {
+      var ordem = espera ? ' · mais antigos primeiro' : '';
+      resSit.textContent = res.qtd + (res.qtd === 1 ? ' orçamento' : ' orçamentos') + ' · ' + moeda(res.total) + ordem;
+    }
     var ultimoBackup = lerEstadoBackup();
     var lemb = LEMBRETE_BACKUP_ATIVO ? D.precisaLembreteBackup(todos, ultimoBackup) : { mostrar: false, qtd: 0 };
     $('hist-lembrete').hidden = !lemb.mostrar;
@@ -951,10 +967,15 @@
     if (!lista.length) {
       vazio.hidden = false;
       vazio.textContent = !todos.length ? 'Nenhum orçamento enviado ainda. Cada envio, em texto ou imagem, aparece aqui.'
-        : histBusca ? 'Nada encontrado para “' + histBusca + '”.' : 'Nenhum orçamento neste período. Toque em Tudo para ver todos.';
+        : histBusca ? 'Nada encontrado para “' + histBusca + '”.'
+        : histSituacao === 'enviado' ? 'Nenhum orçamento aguardando resposta.'
+        : histSituacao === 'vencido' ? 'Nenhum orçamento vencido.'
+        : histSituacao ? 'Nenhum orçamento ' + (histSituacao === 'aprovado' ? 'aprovado' : 'recusado') + ' neste período. Toque em Tudo para ver todos.'
+        : 'Nenhum orçamento neste período. Toque em Tudo para ver todos.';
     } else { vazio.hidden = true; }
-    D.agruparPorDia(lista.slice(0, histLimite), hoje).forEach(function (g) {
-      box.appendChild(el('div', 'dia', g.rotulo));
+    var grupos = espera ? [{ rotulo: '', itens: lista.slice(0, histLimite) }] : D.agruparPorDia(lista.slice(0, histLimite), hoje);
+    grupos.forEach(function (g) {
+      if (g.rotulo) box.appendChild(el('div', 'dia', g.rotulo));
       var bloco = el('div', 'lista-hist');
       g.itens.forEach(function (r) {
         var it = el('button', 'item'); it.type = 'button';
@@ -964,8 +985,13 @@
         meio.appendChild(el('span', 'peca', D.descricaoLinha(r)));
         var dir = el('span', 'dir');
         dir.appendChild(el('b', '', moeda(r.total)));
-        var st = D.situacao(r, hoje);
-        dir.appendChild(el('span', 'pill ' + st, D.ROTULOS_SITUACAO[st]));
+        if (espera) {
+          var te = D.textoEspera(r, hoje);
+          dir.appendChild(el('span', 'pill ' + (te.antigo ? 'vencido' : 'enviado'), te.texto));
+        } else {
+          var st = D.situacao(r, hoje);
+          dir.appendChild(el('span', 'pill ' + st, D.ROTULOS_SITUACAO[st]));
+        }
         it.appendChild(meio); it.appendChild(dir);
         it.addEventListener('click', function () { abrirDetalhe(r); });
         bloco.appendChild(it);
@@ -980,6 +1006,9 @@
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
     b.addEventListener('click', function () { histPeriodo = b.dataset.per; histLimite = 50; desenharHist(); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sit]'), function (b) {
+    b.addEventListener('click', function () { histSituacao = histSituacao === b.dataset.sit ? '' : b.dataset.sit; histLimite = 50; desenharHist(); });
   });
   $('hist-mais').addEventListener('click', function () { histLimite += 50; desenharHist(); });
 
@@ -1376,7 +1405,7 @@
     else { history.replaceState(null, '', location.pathname + location.search); rota(); }
   }
   $('ir-config').addEventListener('click', function () { veioDaCalc = true; location.hash = 'config'; });
-  $('ir-hist').addEventListener('click', function () { veioDaCalc = true; location.hash = 'historico'; });
+  $('ir-hist').addEventListener('click', function () { veioDaCalc = true; histSituacao = ''; location.hash = 'historico'; });
   $('voltar').addEventListener('click', sairConfig);
   $('hist-voltar').addEventListener('click', sairConfig);
   $('cat-voltar').addEventListener('click', sairConfig);

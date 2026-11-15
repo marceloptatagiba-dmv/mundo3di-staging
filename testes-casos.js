@@ -713,6 +713,24 @@
     igual('cartão da Lista: aprovados e valor aprovado em 30 dias', pvCartao.aprovados + '|' + pvCartao.totalAprovados, '11|2486.3');
     igual('cartão da Lista: aprovado agora entra mesmo que o envio tenha sido antes do período', D.aprovadosDoPeriodo([pvVenda(120, 40, 1, 100, 50, '', '')], { periodo: '7', hoje: hojeH }).aprovados + '|' + D.resumir(D.filtrarRegistros([pvVenda(120, 40, 1, 100, 50, '', '')], { periodo: '7', hoje: hojeH })).qtd, '1|0');
     igual('cartão da Lista: a busca vale também para os aprovados', D.aprovadosDoPeriodo(pvVendas, { periodo: 'tudo', busca: 'ANA', hoje: hojeH }).totalAprovados + '|' + D.aprovadosDoPeriodo(pvVendas, { periodo: 'tudo', busca: 'zzz', hoje: hojeH }).aprovados, '947.8|0');
+    // filtro por situação no histórico
+    var idsSit = function (f) { return ids(D.filtrarRegistros(pvTodos.concat([mkReg(80, 100, { total: 1 })]), Object.assign({ hoje: hojeH }, f))); };
+    igual('situação enviado: aguardando resposta, sem período, do mais antigo para o mais novo', idsSit({ situacao: 'enviado' }), '80,60,61,62,63,64,65,66,67');
+    igual('situação enviado ignora o período escolhido', idsSit({ situacao: 'enviado', periodo: 'hoje' }), '80,60,61,62,63,64,65,66,67');
+    igual('situação vencido: validade já passou, do mais antigo para o mais novo', idsSit({ situacao: 'vencido' }), '71,70,72');
+    igual('situação aprovado (30 dias): pela data da aprovação, do mais novo para o mais antigo', idsSit({ situacao: 'aprovado', periodo: '30' }), '50,49,48,47,46,45,44,43,42,41,40');
+    igual('situação aprovado: enviado há 40 dias e aprovado ontem entra em 7 dias', ids(D.filtrarRegistros([pvVenda(130, 40, 1, 100, 50, '', '')], { situacao: 'aprovado', periodo: '7', hoje: hojeH })) + '|' + ids(D.filtrarRegistros([pvVenda(130, 3, 20, 100, 50, '', '')], { situacao: 'aprovado', periodo: '7', hoje: hojeH })), '130|');
+    igual('situação aprovado em Hoje: nenhum', idsSit({ situacao: 'aprovado', periodo: 'hoje' }), '');
+    igual('situação recusado (7 dias)', idsSit({ situacao: 'recusado', periodo: '7' }), '74,73');
+    igual('situação combina com a busca', idsSit({ situacao: 'aprovado', periodo: 'tudo', busca: 'ANA' }), '50,46,42,20');
+    igual('situação desconhecida ou vazia não filtra', idsSit({ situacao: 'cancelado', periodo: 'tudo' }) === idsSit({ periodo: 'tudo' }), true);
+    igual('sem situação a ordem continua do mais novo para o mais antigo', idsSit({ periodo: 'hoje' }).split(',')[0], '67');
+    var pvCont = D.contarSituacoes(pvTodos, hojeH);
+    igual('contagem dos chips: 8 aguardando e 3 vencidos', pvCont.enviado + '|' + pvCont.vencido + '|' + D.contarSituacoes(null, hojeH).enviado, '8|3|0');
+    var esp = function (n, dias, extra) { var t = D.textoEspera(mkReg(n, dias, extra), hojeH); return t.texto + '/' + t.antigo; };
+    igual('etiqueta de espera: hoje, há 1 dia, há 6 dias, há 7 dias (âmbar), há 14 dias', [esp(1, 0), esp(2, 1), esp(3, 6), esp(4, 7), esp(5, 14)].join(' · '), 'hoje/false · há 1 dia/false · há 6 dias/false · há 7 dias/true · há 14 dias/true');
+    igual('etiqueta de espera: vencido mostra quando venceu', esp(6, 20, { validadeAte: '2026-11-10' }), 'venceu 10/11/true');
+
     // 2.000 registros: uma passada
     var pvMuitos = []; for (var pvI = 0; pvI < 2000; pvI++) pvMuitos.push(pvVenda(1000 + pvI, pvI % 60 + 1, pvI % 60, 10 + (pvI % 7), 5, 'Cliente ' + (pvI % 13), 'Peça ' + (pvI % 9)));
     var pvT0 = Date.now(), pvM = D.resumoVendas(pvMuitos, 'tudo', hojeH);
