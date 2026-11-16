@@ -1,6 +1,6 @@
-# Orçamentador Mundo 3DI
+# Mundo 3Di
 
-App web instalável (PWA) para montar e enviar orçamentos de peças impressas em 3D. Funciona no iPhone e no Android, sem loja de aplicativos. Depois do primeiro acesso, funciona também sem internet.
+App web instalável (PWA) da Mundo 3Di para impressão 3D. Hoje monta e envia orçamentos de peças impressas em 3D; a evolução prevista inclui gestão de filamentos, de estoque e de pagamentos/recebíveis. Funciona no iPhone e no Android, sem loja de aplicativos. Depois do primeiro acesso, funciona também sem internet.
 
 ## Como o preço é calculado
 
@@ -66,7 +66,7 @@ O que muda entre os dois fica só em `config-ambiente.js`, `manifest.webmanifest
 
 1. Monte o ambiente numa pasta limpa: `bash ambientes/montar.sh staging <pasta>` (ou `producao`).
 2. Publique o conteúdo dessa pasta no repositório do ambiente (staging primeiro).
-3. Teste no celular em `…/mundo3di-staging/testes.html` e no orçamentador.
+3. Teste no celular em `…/mundo3di-staging/testes.html` e no Mundo 3Di.
 4. Aprovado, monte `producao` e publique no repositório `mundo3di` (produção; antes se chamava `orcamentador-3di` e, antes disso, `calculadora-3di`; o staging era `orcamentador-3di-staging`). Nunca copie o `config-ambiente.js` de um ambiente para o outro.
 
 ## Instalar no celular

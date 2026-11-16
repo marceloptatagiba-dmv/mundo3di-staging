@@ -1,7 +1,7 @@
 {
-  "name": "Orçamentador Mundo 3DI (teste)",
-  "short_name": "Orçamento 3DI (teste)",
-  "description": "Ambiente de teste do orçamentador de peças impressas em 3D",
+  "name": "Mundo 3Di (teste)",
+  "short_name": "Mundo 3Di (teste)",
+  "description": "Ambiente de teste do Mundo 3Di",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",

@@ -1,4 +1,4 @@
-/* Orçamentador Mundo 3DI — interface */
+/* Mundo 3Di — interface */
 (function () {
   'use strict';
 
@@ -1549,7 +1549,7 @@
   if (ios) mostrarConvite('Para instalar: toque em Compartilhar e depois em “Adicionar à Tela de Início”.', false);
   window.addEventListener('beforeinstallprompt', function (ev) {
     ev.preventDefault(); pedidoInstalar = ev;
-    mostrarConvite('Instale o orçamentador na tela inicial para usar sem internet.', true);
+    mostrarConvite('Instale o Mundo 3Di na tela inicial para usar sem internet.', true);
   });
   $('instalar-btn').addEventListener('click', function () {
     if (!pedidoInstalar) return;
@@ -1575,7 +1575,7 @@
     var pendente = versaoNova !== null;
     var link = $('versao-atualizar');
     $('versao-uso').textContent = pendente ? 'versão ' + versaoEmUso + ' ·'
-      : 'Orçamento 3DI' + (versaoEmUso ? ' · versão ' + versaoEmUso : '');
+      : 'Mundo 3Di' + (versaoEmUso ? ' · versão ' + versaoEmUso : '');
     link.hidden = !pendente;
     link.textContent = (versaoNova ? versaoNova + ' pronta' : 'Nova versão pronta') + ' — Atualizar';
     $('faixa-titulo').textContent = versaoNova ? 'Versão ' + versaoNova + ' pronta' : 'Nova versão pronta';

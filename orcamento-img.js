@@ -1,4 +1,4 @@
-/* Orçamentador Mundo 3DI — imagem (JPG) do orçamento, desenhada em canvas.
+/* Mundo 3Di — imagem (JPG) do orçamento, desenhada em canvas.
    Sem biblioteca e sem internet. Usa SÓ o objeto de Calc.dadosOrcamento(): custo, margem, perda e lucro nem chegam aqui. */
 (function (root) {
   'use strict';

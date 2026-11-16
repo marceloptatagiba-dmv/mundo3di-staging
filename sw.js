@@ -1,4 +1,4 @@
-/* Orçamentador Mundo 3DI — funcionamento offline.
+/* Mundo 3Di — funcionamento offline.
    Ao alterar qualquer arquivo do app, aumente a versao em config-ambiente.js (MAJOR.MINOR.PATCH; no staging com -teste.N) para os celulares baixarem a atualização.
    Prefixo e versão do cache vêm de config-ambiente.js: produção e teste têm os seus e nunca apagam o cache um do outro.
    Cache = <prefixo>-v<versao> (ex.: calc3di-v0.4.0 · calc3di-teste-v0.4.0-teste.1). */

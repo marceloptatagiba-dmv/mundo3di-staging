@@ -1,4 +1,4 @@
-/* Orçamentador Mundo 3DI — regras de cálculo (sem dependência de tela) */
+/* Mundo 3Di — regras de cálculo (sem dependência de tela) */
 (function (root) {
   'use strict';
 
@@ -292,7 +292,7 @@
 
   /* ---------- Meu negócio e dados do orçamento (o registro dos envios fica em dados.js) ---------- */
 
-  var NOME_PADRAO = 'Mundo 3DI';
+  var NOME_PADRAO = 'Mundo 3Di';
   var LIMITES_NEGOCIO = { nome: 40, whatsapp: 20, instagram: 40, cidade: 40, cnpj: 18, prazo: 40, pagamento: 80, obs: 160 };
   var VALIDADE_PADRAO = 7;     // dias
 
@@ -360,7 +360,7 @@
 
   /* Texto do orçamento para enviar ao cliente (não revela custo nem margem).
      opcoes.material: nome do filamento — só entra no texto se vier preenchido (opção "Mostrar filamento no orçamento").
-     opcoes.numero: nº do orçamento (inteiro) · opcoes.negocio: nome do negócio (vazio = Mundo 3DI). */
+     opcoes.numero: nº do orçamento (inteiro) · opcoes.negocio: nome do negócio (vazio = Mundo 3Di). */
   function textoOrcamento(r, opcoes) {
     var material = opcoes && opcoes.material ? String(opcoes.material).trim() : '';
     var negocio = opcoes && opcoes.negocio ? String(opcoes.negocio).trim() : '';

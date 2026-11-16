@@ -71,9 +71,9 @@
     igual('mínimo com tudo zero fica 0', m(com({ peso: 0, tempo: 0, minimo: 10 }).valorCobrar), 'R$ 0,00');
 
     // v2 · 5. texto do orçamento
-    igual('texto 1 peça', C.textoOrcamento(r1).replace(NB, ' '), '*Orçamento — Mundo 3DI*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
+    igual('texto 1 peça', C.textoOrcamento(r1).replace(NB, ' '), '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
     igual('texto 3 peças', C.textoOrcamento(r3).replace(NB, ' '),
-      '*Orçamento — Mundo 3DI*\n3 peças impressas em 3D\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
+      '*Orçamento — Mundo 3Di*\n3 peças impressas em 3D\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
 
     // v3 · 1. vários filamentos
     igual('filamento: rolo 1 kg a R$ 150 = R$ 150/kg', C.precoKgMaterial({ precoRolo: 150, pesoRolo: 1000 }), 150);
@@ -108,11 +108,11 @@
     igual('lista vazia salva: cria PLA', C.lerMateriais({ materiais: [], precoKg: 99 }).materiais[0].precoRolo, 99);
     var rTpu = com({ peso: 100, tempo: 0, precoKg: C.precoKgMaterial({ precoRolo: 90, pesoRolo: 500 }) });
     igual('TPU 100 g (rolo 500 g a R$ 90): material', m(rTpu.material), 'R$ 18,00');
-    igual('texto sem material (opção desligada)', C.textoOrcamento(r1, { material: '' }).replace(NB, ' '), '*Orçamento — Mundo 3DI*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
+    igual('texto sem material (opção desligada)', C.textoOrcamento(r1, { material: '' }).replace(NB, ' '), '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
     igual('texto com material (1 peça)', C.textoOrcamento(r1, { material: 'PETG' }).replace(NB, ' '),
-      '*Orçamento — Mundo 3DI*\nPeça impressa em 3D\nMaterial: PETG\n*Valor: R$ 2,36*');
+      '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\nMaterial: PETG\n*Valor: R$ 2,36*');
     igual('texto com material (3 peças)', C.textoOrcamento(r3, { material: 'PETG' }).replace(NB, ' '),
-      '*Orçamento — Mundo 3DI*\n3 peças impressas em 3D\nMaterial: PETG\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
+      '*Orçamento — Mundo 3Di*\n3 peças impressas em 3D\nMaterial: PETG\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
     var txtMat = C.textoOrcamento(r3, { material: 'PETG' }).toLowerCase();
     igual('texto nunca mostra custo nem margem', /custo|margem|lucro|perda/.test(txtMat), false);
 
@@ -177,7 +177,7 @@
     var d1 = C.dadosOrcamento(r1, { negocio: null, numero: 3, data: hoje });
     igual('dados: nº', d1.numero, '0003');
     igual('dados: data e validade (+7 dias)', d1.data + ' → ' + d1.validade, '14/11/2026 → 21/11/2026');
-    igual('dados: nome padrão Mundo 3DI', d1.negocioNome, 'Mundo 3DI');
+    igual('dados: nome padrão Mundo 3Di', d1.negocioNome, 'Mundo 3Di');
     igual('dados: 1 peça sem "valor por peça"', d1.valorPeca, '');
     igual('dados: total', d1.total.replace(NB, ' '), 'R$ 2,36');
     igual('dados: descrição padrão (1 peça)', d1.descricao, 'Peça impressa em 3D');
@@ -197,10 +197,10 @@
       'cidade,cliente,cnpj,data,descricao,instagram,material,negocioNome,numero,obs,pagamento,prazo,qtd,total,validade,valorPeca,whatsapp');
     igual('dados: valores de custo não aparecem em lugar nenhum',
       [rExtra.custoTotal, rExtra.lucro, rExtra.perda, rExtra.custoBase].every(function (v) { return dadosExtra.indexOf(m(v).replace(NB, ' ').toLowerCase()) === -1; }), true);
-    igual('texto com nº: título', C.textoOrcamento(r1, { numero: 7 }).replace(NB, ' '), '*Orçamento Nº 0007 — Mundo 3DI*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
+    igual('texto com nº: título', C.textoOrcamento(r1, { numero: 7 }).replace(NB, ' '), '*Orçamento Nº 0007 — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
     igual('texto com nome do negócio', C.textoOrcamento(r3, { numero: 12, negocio: 'Oficina X', material: 'PETG' }).replace(NB, ' '),
       '*Orçamento Nº 0012 — Oficina X*\n3 peças impressas em 3D\nMaterial: PETG\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
-    igual('texto sem nº continua igual à v2', C.textoOrcamento(r1).replace(NB, ' '), '*Orçamento — Mundo 3DI*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
+    igual('texto sem nº continua igual à v2', C.textoOrcamento(r1).replace(NB, ' '), '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
     var reg = D.novoRegistro(re, { numero: 9, formato: 'imagem', quando: new Date(Date.UTC(2026, 10, 14, 18, 30)), material: 'PLA', cliente: 'Ana', descricao: 'Vaso' });
     igual('registro: nº, formato e data/hora', reg.n + ' ' + reg.formato + ' ' + reg.ts, '9 imagem 2026-11-14T18:30:00.000Z');
     igual('registro: valores (qtd 2, extras R$ 1,50)', [reg.qtd, reg.valorPeca, reg.total, reg.custoTotal, reg.lucro].join('/'), '2/4.18/8.36/4.18/4.18');
@@ -260,7 +260,7 @@
     igual('modo inválido = exato', m(com({ arredondar: 'abc' }).valorCobrar), 'R$ 2,36');
     // orçamento enviado mostra o valor arredondado, sem revelar o arredondamento
     var txtArr = C.textoOrcamento(r3a, { numero: 1 }).replace(NB, ' ');
-    igual('texto mostra o valor arredondado', txtArr, '*Orçamento Nº 0001 — Mundo 3DI*\n3 peças impressas em 3D\nValor por peça: R$ 2,50\n*Total: R$ 7,50*');
+    igual('texto mostra o valor arredondado', txtArr, '*Orçamento Nº 0001 — Mundo 3Di*\n3 peças impressas em 3D\nValor por peça: R$ 2,50\n*Total: R$ 7,50*');
     igual('texto não cita arredondamento', /arredond/.test(txtArr.toLowerCase()), false);
     igual('imagem: total e valor por peça arredondados', (function () { var d = C.dadosOrcamento(r3a, { numero: 1 }); return d.valorPeca.replace(NB, ' ') + ' / ' + d.total.replace(NB, ' '); })(), 'R$ 2,50 / R$ 7,50');
     igual('dados da imagem não citam arredondamento', /arredond/.test(JSON.stringify(C.dadosOrcamento(r3a, { numero: 1 })).toLowerCase()), false);
@@ -480,7 +480,7 @@
     var regsBk = [mkReg(1, 5, { cliente: 'Ana', entrada: D.montarEntrada(entPlanilha), versaoApp: '0.4.0' }), mkReg(2, 3), mkReg(3, 1, { status: 'aprovado', statusEm: em(1, 9).toISOString() })];
     var aparelho = { config: cfgBackup, logo: LOGO, contador: 3, registros: regsBk, catalogo: [{ id: 'c1', nome: 'Suporte' }], materialAtual: 'petg' };
     var arqBk = D.montarBackup(aparelho, { ambiente: 'producao', versaoApp: '0.4.0', criadoEm: em(0, 18, 40) });
-    igual('backup: cabeçalho do arquivo', [arqBk.app, arqBk.formato, arqBk.ambiente, arqBk.versaoApp, arqBk.criadoEm === em(0, 18, 40).toISOString()].join('|'), 'orcamentador-3di|1|producao|0.4.0|true');
+    igual('backup: cabeçalho do arquivo', [arqBk.app, arqBk.formato, arqBk.ambiente, arqBk.versaoApp, arqBk.criadoEm === em(0, 18, 40).toISOString()].join('|'), 'mundo3di|1|producao|0.4.0|true');
     igual('backup: dados guardados', Object.keys(arqBk.dados).join(','), 'config,logo,contador,registros,catalogo,materialAtual');
     igual('backup: versaoApp do staging aceita o sufixo', D.montarBackup(aparelho, { versaoApp: '0.4.0-teste.3' }).versaoApp, '0.4.0-teste.3');
     igual('backup: nome do arquivo', D.nomeArquivoBackup(hojeH), 'backup-orcamento-3di-2026-11-14.json');
@@ -491,17 +491,17 @@
     igual('backup: arquivo com BOM é lido', D.lerBackup('﻿' + JSON.stringify(arqBk)).ok, true);
     igual('backup: sem logo e sem catálogo', JSON.stringify(D.lerBackup(JSON.stringify(D.montarBackup({ config: cfgBackup, contador: 1, registros: [] }, {}))).backup.dados.catalogo) + '|' + D.lerBackup(JSON.stringify(D.montarBackup({ config: cfgBackup }, {}))).backup.dados.logo + '|', '[]||');
     igual('backup: logo que não é imagem é descartado', D.montarDados({ logo: 'javascript:alert(1)' }).logo, '');
-    igual('backup: registros inválidos são descartados na leitura', D.lerBackup(JSON.stringify({ app: 'orcamentador-3di', formato: 1, dados: { registros: [regsBk[0], null, { n: 'x' }, 7] } })).backup.dados.registros.length, 1);
+    igual('backup: registros inválidos são descartados na leitura', D.lerBackup(JSON.stringify({ app: 'mundo3di', formato: 1, dados: { registros: [regsBk[0], null, { n: 'x' }, 7] } })).backup.dados.registros.length, 1);
     igual('backup: catálogo guarda no máximo 100 peças', D.montarDados({ catalogo: new Array(130).fill({ id: 'x' }) }).catalogo.length, 100);
     function erroBk(txt) { var r = D.lerBackup(txt); return r.ok ? 'ok' : r.erro; }
     igual('backup inválido: texto que não é JSON', erroBk('isto não é json'), 'invalido');
     igual('backup inválido: JSON de outro app', erroBk('{"app":"outro","formato":1,"dados":{}}'), 'invalido');
-    igual('backup inválido: sem dados', erroBk('{"app":"orcamentador-3di","formato":1}'), 'invalido');
+    igual('backup inválido: sem dados', erroBk('{"app":"mundo3di","formato":1}'), 'invalido');
     igual('backup inválido: lista em vez de arquivo', erroBk('[1,2]'), 'invalido');
-    igual('backup inválido: formato que não é número', erroBk('{"app":"orcamentador-3di","formato":"1","dados":{}}'), 'invalido');
+    igual('backup inválido: formato que não é número', erroBk('{"app":"mundo3di","formato":"1","dados":{}}'), 'invalido');
     igual('backup inválido: arquivo da planilha', erroBk('Nº;Data;Hora'), 'invalido');
-    igual('backup de formato mais novo pede atualizar o app', erroBk('{"app":"orcamentador-3di","formato":2,"dados":{}}'), 'novo');
-    igual('backup: mensagens de erro', D.ERROS_BACKUP.invalido + ' / ' + D.ERROS_BACKUP.novo, 'Este arquivo não é um backup do Orçamento 3DI. / Backup feito numa versão mais nova. Atualize o app.');
+    igual('backup de formato mais novo pede atualizar o app', erroBk('{"app":"mundo3di","formato":2,"dados":{}}'), 'novo');
+    igual('backup: mensagens de erro', D.ERROS_BACKUP.invalido + ' / ' + D.ERROS_BACKUP.novo, 'Este arquivo não é um backup do Mundo 3Di. / Backup feito numa versão mais nova. Atualize o app.');
     igual('backup: arquivo grande demais não é lido', erroBk(new Array(D.MAX_ARQUIVO_BACKUP + 2).join('a')), 'grande');
     igual('backup de outro ambiente é aceito', D.lerBackup(JSON.stringify(D.montarBackup(aparelho, { ambiente: 'teste' }))).backup.ambiente, 'teste');
     var rb = D.resumoBackup(lido.backup);

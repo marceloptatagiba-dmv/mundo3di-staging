@@ -1,4 +1,4 @@
-/* Orçamentador Mundo 3DI — registro dos envios e histórico (funções puras, sem tela; testadas no node) */
+/* Mundo 3Di — registro dos envios e histórico (funções puras, sem tela; testadas no node) */
 (function (root) {
   'use strict';
 
@@ -8,7 +8,7 @@
   var MAX_CORES = 8;
   var ATALHOS_MARGEM = [70, 80, 90, 100];
   var LIMITE_LEMBRETE_BACKUP = 20;       // orçamentos desde o último backup (a faixa de lembrete aparece só no Histórico)
-  var BACKUP_APP = 'orcamentador-3di';
+  var BACKUP_APP = 'mundo3di';
   var BACKUP_FORMATO = 1;                // número do formato do arquivo: só muda quando o arquivo deixar de ser compatível
   var MAX_CATALOGO = 100;
   var NOME_PECA_MAX = 120; // nome da peça no catálogo; igual ao da descrição do orçamento (o nome vira a descrição quando ela fica vazia)
@@ -517,9 +517,9 @@
    * 'novo' = feito por uma versão mais nova do formato (o app precisa ser atualizado).
    */
   var ERROS_BACKUP = {
-    invalido: 'Este arquivo não é um backup do Orçamento 3DI.',
+    invalido: 'Este arquivo não é um backup do Mundo 3Di.',
     novo: 'Backup feito numa versão mais nova. Atualize o app.',
-    grande: 'Este arquivo é grande demais para ser um backup do Orçamento 3DI.'
+    grande: 'Este arquivo é grande demais para ser um backup do Mundo 3Di.'
   };
   function lerBackup(texto) {
     if (typeof texto !== 'string') return { ok: false, erro: 'invalido' };
