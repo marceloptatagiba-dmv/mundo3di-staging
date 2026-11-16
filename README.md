@@ -60,14 +60,14 @@ O app precisa estar num endereço **https** para poder ser instalado e funcionar
 
 ## Ambientes: teste (staging) e produção
 
-Antes de ir para produção, toda versão passa pelo **staging**, um site de teste separado (repositório `orcamentador-3di-staging`, também no GitHub Pages). Os dois ambientes não interferem um no outro: cada um tem o seu cache offline e as suas configurações salvas, e o app de teste se instala com o nome **Orçamento 3DI (teste)**, faixa âmbar e a página `testes.html` (cálculo, offline, instalação, compartilhamento e teclado de tempo, direto no celular).
+Antes de ir para produção, toda versão passa pelo **staging**, um site de teste separado (repositório `mundo3di-staging`, também no GitHub Pages). Os dois ambientes não interferem um no outro: cada um tem o seu cache offline e as suas configurações salvas, e o app de teste se instala com o nome **Orçamento 3DI (teste)**, faixa âmbar e a página `testes.html` (cálculo, offline, instalação, compartilhamento e teclado de tempo, direto no celular).
 
 O que muda entre os dois fica só em `config-ambiente.js`, `manifest.webmanifest` e `testes.html` (versões de teste em `ambientes/staging/`). O resto dos arquivos é idêntico.
 
 1. Monte o ambiente numa pasta limpa: `bash ambientes/montar.sh staging <pasta>` (ou `producao`).
 2. Publique o conteúdo dessa pasta no repositório do ambiente (staging primeiro).
-3. Teste no celular em `…/orcamentador-3di-staging/testes.html` e no orçamentador.
-4. Aprovado, monte `producao` e publique no repositório `orcamentador-3di` (produção; antes se chamava `calculadora-3di`). Nunca copie o `config-ambiente.js` de um ambiente para o outro.
+3. Teste no celular em `…/mundo3di-staging/testes.html` e no orçamentador.
+4. Aprovado, monte `producao` e publique no repositório `mundo3di` (produção; antes se chamava `orcamentador-3di` e, antes disso, `calculadora-3di`; o staging era `orcamentador-3di-staging`). Nunca copie o `config-ambiente.js` de um ambiente para o outro.
 
 ## Instalar no celular
 
