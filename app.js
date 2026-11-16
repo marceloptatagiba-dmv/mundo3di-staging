@@ -592,7 +592,7 @@
     this.value = '';
     if (!arq) return;
     OrcamentoImg.reduzirLogo(arq).then(function (src) {
-      logoPendente = src; mostrarLogo(src);
+      logoPendente = src; mostrarLogo(src); atualizarBarraConfig();
       avisar('Logo pronto — toque em Salvar');
     }, function () { avisar('Não foi possível ler essa imagem'); });
   });
@@ -713,7 +713,7 @@
   /* Restaura hora (modo Simples), perda, preço mínimo e arredondamento (Exato); a lista de filamentos, o modo escolhido, os dados da impressora e os dados do negócio são mantidos */
   $('restaurar').addEventListener('click', function () {
     preencherCustos(C.PADROES);
-    avisar('Padrões restaurados — toque em Salvar');
+    avisar('Custos restaurados — toque em Salvar');
   });
 
   /* ---------- Backup, restauração e planilha ---------- */
@@ -752,7 +752,7 @@
     try { materialAtual = localStorage.getItem(CHAVE_MAT); } catch (e) { materialAtual = null; }
     montarSeletor(); validarVinculo(); atualizar();
     preencherConfig(config); configInicial = JSON.stringify(lerConfigTela());
-    desenharBackup();
+    desenharBackup(); atualizarBarraConfig();
   }
   function desenharBackup() {
     var d = D.descreverBackup(lerEstadoBackup(), lerLista(), new Date());
@@ -1494,18 +1494,65 @@
     });
   });
 
+  /* ---------- Configurações em lista e subtelas (0.5.3) ----------
+     Todos os campos continuam no mesmo formulário (só mostrar/esconder): ir e voltar entre a lista e as subtelas não perde nada do que foi digitado. */
+  var SUBS = { filamentos: 'Filamentos', custos: 'Custos', negocio: 'Meu negócio', backup: 'Backup e dados' };
+  var telaAtual = '';
+  var subAberta = false;   // subtela aberta tocando na lista: há uma entrada a mais no histórico
+  function subDaRota() { var m = /^#config-(\w+)$/.exec(location.hash); return m && SUBS[m[1]] ? m[1] : ''; }
+  function mostrarSub(sub) {
+    $('cfg-lista').hidden = !!sub;
+    $('form-config').hidden = !sub || sub === 'backup';
+    Array.prototype.forEach.call(document.querySelectorAll('#form-config [data-sub]'), function (s) { s.hidden = s.dataset.sub !== sub; });
+    $('cartao-backup').hidden = sub !== 'backup';
+    $('cfg-titulo').textContent = sub ? SUBS[sub] : 'Configurações';
+    $('cfg-trilha').hidden = !sub;
+    if (sub !== 'backup') fecharPaineisBackup();
+  }
+  /* Uma linha de resumo por área, calculada do que está na tela (inclui o que ainda não foi salvo) */
+  function desenharResumoConfig() {
+    var c = lerConfigTela(), mats = c.materiais, padrao = materialPorId(c, c.materialPadrao) || mats[0];
+    $('res-filamentos').textContent = (padrao && padrao.nome ? padrao.nome : 'Filamento') + ' · ' + moeda(C.precoKgMaterial(padrao)) + '/kg' +
+      (mats.length > 1 ? ' · ' + mats.length + ' filamentos' : '');
+    var arr = { exato: 'Exato', '50': ',50', '90': ',90', inteiro: 'Inteiro' };
+    var hora = c.modoHora === 'detalhado' ? C.calcularImpressora(c.impressora).horaTotal : c.valorHora;
+    $('res-custos').textContent = 'Hora ' + moeda(hora) + ' · Perda ' + num(c.perdaPct) + '% · Arredondamento ' + arr[c.arredondamento];
+    var n = c.negocio, partes = [];
+    if (n.nome) partes.push(n.nome);
+    if (n.whatsapp) partes.push(n.whatsapp);
+    if (logoPendente || (logoPendente === undefined && lerLogoSalvo())) partes.push('logo próprio');
+    $('res-negocio').textContent = partes.length ? partes.join(' · ') : 'Ainda não preenchido: o orçamento usa o logo 3Di';
+    $('res-backup').textContent = $('backup-titulo').textContent;
+  }
+  /* Barra "Alterações não salvas · Salvar": aparece em qualquer parte de Configurações quando há algo digitado e não salvo */
+  function atualizarBarraConfig() {
+    if ($('tela-config').hidden) { $('cfg-barra').hidden = true; return; }
+    $('cfg-barra').hidden = !configAlterada();
+    desenharResumoConfig();
+  }
+  ['input', 'change', 'click'].forEach(function (ev) {
+    $('form-config').addEventListener(ev, function () { setTimeout(atualizarBarraConfig, 0); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.cfg-item'), function (b) {
+    b.addEventListener('click', function () { subAberta = true; location.hash = 'config-' + b.dataset.sub; });
+  });
+
   /* ---------- Navegação (o botão voltar do Android funciona) ---------- */
-  function telaDaRota() { return location.hash === '#config' ? 'config' : location.hash === '#historico' ? 'hist' : location.hash === '#vendas' ? 'vendas' : location.hash === '#catalogo' ? 'cat' : 'calc'; }
+  function telaDaRota() { return location.hash === '#config' || subDaRota() ? 'config' : location.hash === '#historico' ? 'hist' : location.hash === '#vendas' ? 'vendas' : location.hash === '#catalogo' ? 'cat' : 'calc'; }
   /* Troca entre Lista e Vendas (e vai da fila do painel ao Histórico) sem empilhar tela: o voltar do Android continua levando à calculadora. */
   function trocarAba(destino) { history.replaceState(null, '', location.pathname + location.search + '#' + destino); rota(); }
-  function mostrar(tela) {
+  function mostrar(tela, sub) {
     $('tela-calc').hidden = tela !== 'calc';
     $('tela-config').hidden = tela !== 'config';
     $('tela-hist').hidden = tela !== 'hist';
     $('tela-vendas').hidden = tela !== 'vendas';
     $('tela-cat').hidden = tela !== 'cat';
-    if (tela === 'config') { preencherConfig(config); configInicial = JSON.stringify(lerConfigTela()); desenharBackup(); }
-    else fecharPaineisBackup();
+    var entrando = telaAtual !== 'config';
+    telaAtual = tela;
+    if (tela === 'config') {
+      if (entrando) { preencherConfig(config); configInicial = JSON.stringify(lerConfigTela()); }   // ir da lista a uma subtela não apaga o que foi digitado
+      desenharBackup(); mostrarSub(sub || ''); atualizarBarraConfig();
+    } else { fecharPaineisBackup(); $('cfg-barra').hidden = true; }
     if (tela === 'hist') desenharHist(); else fecharSheetsHist();
     if (tela === 'vendas') desenharVendas();
     if (tela === 'cat') { $('cat-busca').value = ''; desenharCat(); } else fecharPaineisCat();
@@ -1515,17 +1562,22 @@
   function rota() {
     var t = telaDaRota();
     if (t === 'calc') veioDaCalc = false;
-    mostrar(t);
+    if (!subDaRota()) subAberta = false;
+    mostrar(t, t === 'config' ? subDaRota() : '');
   }
   window.addEventListener('hashchange', rota);
   var veioDaCalc = false;
   function sairConfig() {
-    if (veioDaCalc) { veioDaCalc = false; history.back(); }
+    if (veioDaCalc) { var passos = subAberta ? 2 : 1; veioDaCalc = false; subAberta = false; history.go(-passos); }
     else { history.replaceState(null, '', location.pathname + location.search); rota(); }
   }
   $('ir-config').addEventListener('click', function () { veioDaCalc = true; location.hash = 'config'; });
   $('ir-hist').addEventListener('click', function () { veioDaCalc = true; histSituacao = ''; origemHist = ''; location.hash = 'historico'; });
-  $('voltar').addEventListener('click', sairConfig);
+  $('voltar').addEventListener('click', function () {
+    if (!subDaRota()) { sairConfig(); return; }                 // na lista: sai de Configurações
+    if (subAberta) { subAberta = false; history.back(); }       // numa subtela: volta à lista
+    else { history.replaceState(null, '', location.pathname + location.search + '#config'); rota(); }
+  });
   $('hist-voltar').addEventListener('click', function () {
     if (origemHist === 'vendas') { origemHist = ''; histSituacao = ''; trocarAba('vendas'); } else sairConfig();   // aberto pela fila do painel: volta ao painel
   });

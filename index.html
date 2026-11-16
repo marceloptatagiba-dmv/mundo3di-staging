@@ -192,6 +192,23 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
 .aviso.versao span{display:block;font-size:12px;font-weight:600;color:var(--suave-escuro)}
 .aviso.versao span:empty{display:none}
 
+/* ---- Configurações em lista e subtelas (0.5.3) ---- */
+.cartao[hidden],.barra[hidden],.cfg-lista[hidden],.cfg-form[hidden]{display:none}
+.cfg-lista{flex:1;display:flex;flex-direction:column;gap:10px}
+.cfg-item{display:flex;align-items:center;gap:12px;width:100%;min-height:72px;padding:12px 14px;background:#fff;border:1.5px solid var(--borda);border-radius:16px;text-align:left}
+.cfg-item>svg{flex-shrink:0;color:var(--verde-texto)}
+.cfg-ico{width:44px;height:44px;border-radius:12px;background:#E8F2DC;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--verde-texto)}
+.cfg-ico b{font-size:14px;font-weight:800}
+.cfg-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.cfg-txt strong{font-size:16px;font-weight:800}
+.cfg-txt span{font-size:12.5px;font-weight:500;line-height:1.3;color:var(--suave)}
+.cfg-form{display:flex;flex-direction:column;gap:12px}
+.cfg-versao{margin:auto 0 0;padding-top:12px;display:flex;justify-content:center;align-items:baseline;gap:4px;font-size:12px;font-weight:600;color:var(--suave)}
+.so-leitor{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;margin:-1px}
+.cfg-barra{flex-direction:row;align-items:center;gap:12px}
+.cfg-barra .btn.principal{width:auto;flex:1;height:48px;font-size:16px}
+.cfg-barra-txt{font-size:12px;font-weight:700;line-height:1.3;color:var(--suave);max-width:104px}
+
 /* ---- Painel de vendas (v5) ---- */
 #tela-vendas main{gap:10px;padding-top:12px}
 .aba{display:flex;gap:4px;padding:4px;background:#fff;border:1.5px solid var(--borda);border-radius:14px}
@@ -491,23 +508,47 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
       </button>
       <div class="titulo-config">
-        <h1>Configurações</h1>
-        <div class="versao-cab"><span id="versao-uso"></span><button class="link-versao" type="button" id="versao-atualizar" hidden></button></div>
+        <h1 id="cfg-titulo">Configurações</h1>
+        <div class="versao-cab" id="cfg-trilha" hidden>Configurações</div>
       </div>
     </header>
 
     <main>
-      <p class="intro">Estes valores ficam salvos neste celular e valem para todos os cálculos.</p>
+      <div class="cfg-lista" id="cfg-lista">
+        <p class="intro">Estes valores ficam salvos neste celular e valem para todos os cálculos.</p>
+        <button class="cfg-item" type="button" data-sub="filamentos">
+          <span class="cfg-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/></svg></span>
+          <span class="cfg-txt"><strong>Filamentos</strong><span id="res-filamentos"></span></span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button class="cfg-item" type="button" data-sub="custos">
+          <span class="cfg-ico"><b aria-hidden="true">R$</b></span>
+          <span class="cfg-txt"><strong>Custos</strong><span id="res-custos"></span></span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button class="cfg-item" type="button" data-sub="negocio">
+          <span class="cfg-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9h16M4 9v11h16V9M10 20v-5h4v5"/></svg></span>
+          <span class="cfg-txt"><strong>Meu negócio</strong><span id="res-negocio"></span></span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button class="cfg-item" type="button" data-sub="backup">
+          <span class="cfg-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg></span>
+          <span class="cfg-txt"><strong>Backup e dados</strong><span id="res-backup"></span></span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <p class="cfg-versao"><span id="versao-uso"></span><button class="link-versao" type="button" id="versao-atualizar" hidden></button></p>
+      </div>
 
-      <form class="cartao config" id="form-config" novalidate>
-        <h2 class="titulo-secao">Filamentos</h2>
+      <form class="cfg-form" id="form-config" novalidate hidden>
+        <section class="cartao config" data-sub="filamentos" aria-label="Filamentos" hidden>
         <div class="lista-mat" id="lista-materiais"></div>
         <button class="btn mais" type="button" id="add-material">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><path d="M12 5v14M5 12h14"/></svg>Adicionar filamento
         </button>
-        <label class="marcar"><input type="checkbox" id="cfg-mostrar-material"><span>Mostrar o filamento no orçamento enviado ao cliente</span></label>
-        <div class="divisor"></div>
-        <h2 class="titulo-secao">Custos</h2>
+        </section>
+
+        <section class="cartao config" data-sub="custos" aria-label="Custos" hidden>
+        <h2 class="titulo-secao">Produção</h2>
         <div class="campo"><span>Custo da hora de impressão</span>
           <div class="grade2" role="group" aria-label="Como calcular o custo da hora">
             <button class="atalho" type="button" id="modo-simples" aria-pressed="true">Simples</button>
@@ -560,6 +601,8 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
           <span class="caixa"><input id="cfg-perda" type="text" inputmode="decimal" autocomplete="off"><small>%</small></span>
           <span class="ajuda neutra">Acrescentado ao custo base para chegar ao custo total</span>
         </label>
+        <div class="divisor"></div>
+        <h2 class="titulo-secao">Preço de venda</h2>
         <label class="campo"><span>Preço mínimo por pedido</span>
           <span class="caixa"><b>R$</b><input id="cfg-minimo" type="text" inputmode="decimal" autocomplete="off"></span>
           <span class="ajuda neutra">Nenhum orçamento sai abaixo disso. Deixe 0,00 para desligar.</span>
@@ -574,7 +617,11 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
           <span class="ajuda neutra" id="a-arred"></span>
         </div>
         <div class="divisor"></div>
-        <h2 class="titulo-secao">Meu negócio</h2>
+        <button class="btn mais" type="button" id="restaurar">Restaurar custos padrão</button>
+        </section>
+
+        <section class="cartao config" data-sub="negocio" aria-label="Meu negócio" hidden>
+        <h2 class="titulo-secao">Identidade</h2>
         <p class="ajuda neutra">Aparece na imagem do orçamento. Tudo é opcional.</p>
         <div class="campo"><span>Logo</span>
           <div class="logo-linha">
@@ -604,6 +651,8 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
             <span class="caixa texto"><input id="neg-cnpj" type="text" inputmode="numeric" maxlength="18" autocomplete="off"></span>
           </label>
         </div>
+        <div class="divisor"></div>
+        <h2 class="titulo-secao">Padrões do orçamento</h2>
         <label class="campo"><span>Validade do orçamento</span>
           <span class="caixa"><input id="neg-validade" type="text" inputmode="numeric" autocomplete="off"><small>dias</small></span>
           <span class="ajuda neutra">Deixe 0 para não mostrar a validade.</span>
@@ -617,14 +666,12 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
         <label class="campo"><span>Observação padrão</span>
           <span class="caixa texto"><input id="neg-obs" type="text" maxlength="160" autocomplete="off" placeholder="Ex.: 50% na aprovação, 50% na entrega"></span>
         </label>
+        <label class="marcar"><input type="checkbox" id="cfg-mostrar-material"><span>Mostrar o filamento no orçamento enviado ao cliente</span></label>
+        </section>
       </form>
 
-      <div class="espaco"></div>
-      <button class="btn principal" type="submit" form="form-config">Salvar</button>
-      <button class="btn" type="button" id="restaurar">Restaurar padrões</button>
-
-      <section class="cartao backup" id="cartao-backup" aria-labelledby="t-backup">
-        <h2 class="titulo-secao" id="t-backup">Backup</h2>
+      <section class="cartao backup" id="cartao-backup" aria-labelledby="t-backup" hidden>
+        <h2 class="so-leitor" id="t-backup">Backup e dados</h2>
         <div class="linha"><div class="rot"><strong id="backup-titulo"></strong><span id="backup-detalhe"></span></div></div>
         <button class="btn principal" type="button" id="backup-fazer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>Fazer backup</button>
         <div class="botoes">
@@ -636,6 +683,11 @@ main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px calc(20px +
         <p class="ajuda neutra">Salva configurações, filamentos, logo, catálogo e histórico num arquivo. Guarde no Google Drive, no e-mail ou mande para você mesmo no WhatsApp. O arquivo tem seus custos e clientes: <strong>não envie para cliente</strong>.</p>
       </section>
     </main>
+
+    <div class="barra cfg-barra" id="cfg-barra" hidden>
+      <span class="cfg-barra-txt">Alterações não salvas</span>
+      <button class="btn principal" type="submit" form="form-config">Salvar</button>
+    </div>
   </section>
 
   <!-- TELA: HISTÓRICO DE ORÇAMENTOS -->
