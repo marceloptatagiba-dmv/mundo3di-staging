@@ -957,8 +957,9 @@
   }
   function desenharHist() {
     var todos = lerLista(), hoje = new Date();
-    var espera = ESPERA.indexOf(histSituacao) !== -1 || (!histSituacao && !!histPagamento) || !!histExtra.prazoVencido;
-    var lista = D.filtrarRegistros(todos, { periodo: histExtra.prazoVencido ? 'tudo' : histPeriodo, situacao: histSituacao, pagamento: histPagamento, venceEm: histExtra.venceEm, prazoVencido: histExtra.prazoVencido, busca: histBusca, hoje: hoje });
+    var espera = ESPERA.indexOf(histSituacao) !== -1 || (!histSituacao && !!histPagamento) || !!histExtra.prazoVencido || !!histExtra.aReceber;
+    var lista = D.filtrarRegistros(todos, { periodo: histExtra.prazoVencido || histExtra.aReceber ? 'tudo' : histPeriodo, situacao: histSituacao, pagamento: histPagamento, venceEm: histExtra.venceEm, prazoVencido: histExtra.prazoVencido, busca: histBusca, hoje: hoje });
+    if (histExtra.aReceber) lista = lista.filter(function (r) { return D.situacaoPagamento(r).falta > 0; });
     var res = D.resumir(lista);
     $('hist-n').textContent = String(lista.filter(function (r) { return r.status !== 'pedido'; }).length);   // pedido ainda sem orçamento não conta como enviado
     $('hist-total').textContent = moeda(res.total);
@@ -980,7 +981,7 @@
       b.setAttribute('aria-pressed', String(pg === histPagamento));
       b.textContent = D.ROTULOS_PAGAMENTO[pg] + (cont.pagamento[pg] ? ' ' + cont.pagamento[pg] : '');
     });
-    var filtrado = !!histSituacao || !!histPagamento || !!histExtra.prazoVencido;
+    var filtrado = !!histSituacao || !!histPagamento || !!histExtra.prazoVencido || !!histExtra.aReceber;
     $('hist-resumo').hidden = filtrado;
     var resSit = $('hist-sit-resumo');
     resSit.hidden = !filtrado;
@@ -1048,7 +1049,7 @@
   function mudarPeriodo(p) {
     histPeriodo = p; histLimite = 50;
     try { localStorage.setItem(CHAVE_PERIODO, p); } catch (e) {}
-    if (!$('tela-vendas').hidden) desenharVendas(); else desenharHist();
+    if (!$('tela-vendas').hidden) desenharVendas(); else if (!$('tela-negocio').hidden) desenharNegocio(); else desenharHist();
   }
   Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
     b.addEventListener('click', function () { mudarPeriodo(b.dataset.per); });
@@ -1801,6 +1802,9 @@
     if (logoPendente || (logoPendente === undefined && lerLogoSalvo())) partes.push('logo próprio');
     $('res-negocio').textContent = partes.length ? partes.join(' · ') : 'Ainda não preenchido: o orçamento usa o logo 3Di';
     $('res-backup').textContent = $('backup-titulo').textContent;
+    var todosCfg = lerLista(), lembCfg = D.precisaLembreteBackup(todosCfg, lerEstadoBackup()), limCfg = D.estadoLimite(todosCfg.length);
+    $('selo-backup').hidden = !(lembCfg.mostrar || limCfg.perto);
+    if (limCfg.perto) $('res-backup').textContent = limCfg.texto;
     var pecas = lerCatalogo(), nPecas = Array.isArray(pecas) ? pecas.length : 0;
     $('res-catalogo').textContent = nPecas ? nPecas + (nPecas === 1 ? ' peça salva' : ' peças salvas') : 'Nenhuma peça salva ainda';
   }
@@ -1908,13 +1912,26 @@
     } else { fecharPaineisBackup(); $('cfg-barra').hidden = true; }
     if (tela === 'hist') desenharHist(); else fecharSheetsHist();
     if (tela === 'inicio') desenharInicio();
+    if (tela === 'negocio') desenharNegocio();
     if (tela === 'tarefas') desenharTarefasTodas();
     if (tela === 'vendas') desenharVendas();
     if (tela === 'cat') { $('cat-busca').value = ''; desenharCat(); } else fecharPaineisCat();
     desenharVersao();
     window.scrollTo(0, 0);
   }
-  function rota() { var t = telaDaRota(); mostrar(t, t === 'config' ? subDaRota() : ''); }
+  function rota() { var t = telaDaRota(); mostrar(t, t === 'config' ? subDaRota() : ''); ultimaEntrada = { estado: history.state, url: location.pathname + location.search + location.hash }; }
+  /* Voltar (Android/gesto) com painel aberto: fecha o painel e fica na mesma tela */
+  var ultimaEntrada = null;
+  function fecharPainelAberto() {
+    var ordem = [['folha-cond', fecharCond], ['folha-rec', fecharRec], ['folha-cobrar', fecharCobrar], ['folha-cancelar', fecharCancelar], ['folha-excluir', function () { $('folha-excluir').hidden = true; }],
+      ['folha-pedido', fecharPedido], ['folha-det', fecharDetalhe], ['folha', fecharFolha], ['folha-sair-cfg', fecharSairCfg], ['folha-cat-salvar', fecharPaineisCat], ['folha-cat-pedido', fecharPaineisCat], ['folha-cat-editar', fecharPaineisCat],
+      ['folha-restaurar', fecharPaineisBackup], ['folha-desfazer', fecharPaineisBackup]];
+    for (var i = 0; i < ordem.length; i++) if (!$(ordem[i][0]).hidden) { ordem[i][1](); if (ordem[i][0] === 'folha-cond' || ordem[i][0] === 'folha-rec') soltarChave(); return true; }
+    return false;
+  }
+  window.addEventListener('popstate', function () {
+    if (ultimaEntrada && fecharPainelAberto()) history.pushState(ultimaEntrada.estado, '', ultimaEntrada.url);
+  });
   window.addEventListener('hashchange', rota);
 
   /* Quem abre o app direto numa rota que não é o Início (atalho, recarga sem histórico) ganha o Início por baixo, para o voltar funcionar */
@@ -2022,6 +2039,7 @@
     if (!inicioPronto) return;
     if (!$('tela-inicio').hidden) desenharInicio();
     if (!$('tela-tarefas').hidden) desenharTarefasTodas();
+    if (!$('tela-negocio').hidden) desenharNegocio();
   }
   function executarTarefa(t) {
     var a = t.alvo || {};
@@ -2038,9 +2056,50 @@
       detChave = t.chave; desenharDetalhe(reg); abrirRec();
     }
   }
-  $('ini-olho').addEventListener('click', function () {
+  function alternarOlho() {
     try { localStorage.setItem(CHAVE_OLHO, olhoEscondido() ? '0' : '1'); } catch (e) {}
-    desenharInicio();
+    if (!$('tela-inicio').hidden) desenharInicio(); else desenharNegocio();
+  }
+  $('ini-olho').addEventListener('click', alternarOlho);
+  $('neg-olho').addEventListener('click', alternarOlho);
+
+  /* ---------- Negócio ---------- */
+  function desenharNegocio() {
+    var todos = lerLista(), hoje = new Date(), r = D.resumoVendas(todos, histPeriodo, hoje), esc = olhoEscondido();
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pern]'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.pern === r.periodo)); });
+    $('neg-olho').setAttribute('aria-pressed', String(esc));
+    $('neg-olho').setAttribute('aria-label', esc ? 'Mostrar valores' : 'Esconder valores');
+    $('neg-olho-aberto').hidden = esc; $('neg-olho-fechado').hidden = !esc;
+    var per = ROTULO_PERIODO[r.periodo];
+    $('n-rot').textContent = 'Vendas aprovadas · ' + per;
+    $('n-valor').textContent = valorOlho(r.vendas);
+    var dv = $('n-delta');
+    if (r.qtd > 0 && r.variacao !== null) {
+      var n = Math.round(Math.abs(r.variacao)), base = ROTULO_ANTERIOR[r.periodo];
+      dv.className = 'v-delta' + (n === 0 ? ' igual' : r.variacao < 0 ? ' baixo' : '');
+      dv.textContent = n === 0 ? 'igual ' + base.replace(/^os /, 'aos ').replace(/^o /, 'ao ') : (r.variacao < 0 ? '↓ ' : '↑ ') + (esc ? '••' : n) + '% ' + (r.variacao < 0 ? 'abaixo d' : 'sobre ') + base;
+      dv.hidden = false;
+    } else dv.hidden = true;
+    $('n-stats').hidden = r.qtd === 0;
+    $('n-qtd').textContent = String(r.qtd); $('n-ticket').textContent = valorOlho(r.ticket);
+    $('n-lucro').textContent = valorOlho(r.lucro);
+    var antigos = r.aguardando.antigos;
+    $('n-ag-sub').textContent = !r.aguardando.qtd ? 'nenhum no momento' : antigos ? antigos + ' há ' + D.DIAS_ANTIGO + ' dias ou mais' : 'nenhum há ' + D.DIAS_ANTIGO + ' dias ou mais';
+    $('n-ag-valor').textContent = valorOlho(r.aguardando.total); $('n-ag-qtd').textContent = r.aguardando.qtd === 1 ? '1 orçamento' : r.aguardando.qtd + ' orçamentos'; $('n-ag').disabled = !r.aguardando.qtd;
+    $('n-ve-valor').textContent = valorOlho(r.vencidos.total); $('n-ve-qtd').textContent = r.vencidos.qtd === 1 ? '1 orçamento' : r.vencidos.qtd + ' orçamentos'; $('n-ve').disabled = !r.vencidos.qtd;
+    var ar = D.aReceber(todos), rec = D.recebidoNoPeriodo(todos, r.periodo, hoje);
+    $('n-receber-valor').textContent = valorOlho(ar.total);
+    $('n-receber-sub').textContent = (ar.qtd === 1 ? '1 pedido' : ar.qtd + ' pedidos') + ' · recebido (' + per + '): ' + valorOlho(rec.total);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-pern]'), function (b) {
+    b.addEventListener('click', function () { mudarPeriodo(b.dataset.pern); });
+  });
+  $('n-painel').addEventListener('click', function () { irTarefa('vendas'); });
+  $('n-ag').addEventListener('click', function () { abrirFila('enviado'); });
+  $('n-ve').addEventListener('click', function () { abrirFila('vencido'); });
+  $('n-receber').addEventListener('click', function () {
+    histSituacao = ''; histPagamento = ''; histExtra = { aReceber: true }; histBusca = ''; $('hist-busca').value = ''; histLimite = 50;
+    irAba('pedidos');
   });
   $('ini-vendas-btn').addEventListener('click', function () { irAba('negocio'); });
   $('ini-fazer').addEventListener('click', function () { irTarefa('orcar'); });
@@ -2110,7 +2169,7 @@
 
   /* ---------- Versão e aviso de nova versão ---------- */
   /* Novidades por MAJOR.MINOR (o sufixo -teste.N do staging é ignorado na busca). */
-  var NOVIDADES = { '0.4': 'histórico, backup e catálogo', '0.5': 'painel de vendas' };
+  var NOVIDADES = { '0.4': 'histórico, backup e catálogo', '0.5': 'painel de vendas', '0.6': 'início novo, pedidos com etapas e pagamentos' };
   var CHAVE_VISTA = CHAVE + '-versao-vista';
   var CHAVE_RETOMAR = CHAVE + '-retomar';
   var versaoEmUso = C.lerVersao(AMB.versao) ? AMB.versao : '';   // lida de config-ambiente.js (a que esta tela carregou)

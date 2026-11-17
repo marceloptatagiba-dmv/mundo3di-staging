@@ -473,6 +473,16 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
 .tarefa.em-dia{padding:14px;font-size:14px;font-weight:700;color:var(--verde-texto)}
 .tarefa.feito .tarefa-txt{color:var(--suave)}
 .tarefa .ok{flex-shrink:0;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:var(--verde-texto)}
+.neg-olho{margin:0}
+.n-lucro{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:6px;padding-top:10px;border-top:1px solid var(--linha);font-size:13px;font-weight:600;color:var(--suave)}
+.n-lucro b{font-size:16px;color:var(--preto)}
+.n-mosaico{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.n-peca{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px;background:#fff;border:1.5px solid var(--borda);border-radius:16px;text-align:left;color:var(--preto)}
+.n-peca strong{font-size:15px;font-weight:800}
+.n-peca>span:not(.cfg-ico){font-size:12px;font-weight:500;line-height:1.3;color:var(--suave)}
+.n-peca-valor{font-size:18px;font-weight:800;color:#8A4B04}
+.selo-fazer{flex-shrink:0;padding:3px 10px;border-radius:999px;background:#FBEBD0;color:#8A4B04;font-size:12px;font-weight:800}
+.selo-fazer[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -531,15 +541,54 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
     <main><div class="tarefas" id="tar-lista"></div></main>
   </section>
 
-  <!-- TELA: NEGÓCIO (provisória até a etapa 6) -->
+  <!-- TELA: NEGÓCIO -->
   <section class="tela" id="tela-negocio" aria-label="Negócio" hidden>
-    <header><h1>Negócio</h1></header>
+    <header>
+      <h1>Negócio</h1>
+      <button class="ini-olho neg-olho" type="button" id="neg-olho" aria-label="Esconder valores" aria-pressed="false">
+        <svg id="neg-olho-aberto" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg id="neg-olho-fechado" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4"/><path d="M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a10 10 0 0 0 4.4-1"/></svg>
+      </button>
+    </header>
     <main>
-      <div class="cfg-lista">
-        <button class="cfg-item" type="button" data-ir="vendas">
+      <div class="chips" role="group" aria-label="Período">
+        <button class="chip" type="button" data-pern="hoje" aria-pressed="false">Hoje</button>
+        <button class="chip" type="button" data-pern="7" aria-pressed="false">7 dias</button>
+        <button class="chip" type="button" data-pern="30" aria-pressed="true">30 dias</button>
+        <button class="chip" type="button" data-pern="mes" aria-pressed="false">Mês</button>
+        <button class="chip" type="button" data-pern="tudo" aria-pressed="false">Tudo</button>
+      </div>
+      <section class="v-cartao" aria-label="Vendas aprovadas" aria-live="polite">
+        <div class="v-rot" id="n-rot">Vendas aprovadas</div>
+        <div class="v-valor" id="n-valor">R$ 0,00</div>
+        <div class="v-delta" id="n-delta" hidden></div>
+        <div class="v-stats" id="n-stats" hidden>
+          <div><b id="n-qtd">0</b><span>vendas aprovadas</span></div>
+          <div><b id="n-ticket">R$ 0,00</b><span>ticket médio</span></div>
+        </div>
+        <div class="n-lucro"><span>Lucro estimado · só você vê</span><b id="n-lucro">R$ 0,00</b></div>
+      </section>
+      <section class="v-cartao v-fila" aria-label="Esperando resposta e vencidos">
+        <button type="button" class="v-linha" id="n-ag">
+          <span><strong>Esperando resposta</strong><small id="n-ag-sub"></small></span>
+          <span class="v-dir"><b id="n-ag-valor">R$ 0,00</b><small id="n-ag-qtd"></small></span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A524A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button type="button" class="v-linha" id="n-ve">
+          <span><strong class="ambar">Vencidos</strong><small>validade já passou</small></span>
+          <span class="v-dir"><b id="n-ve-valor">R$ 0,00</b><small id="n-ve-qtd"></small></span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A524A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+      </section>
+      <p class="cfg-grupo">Gestão</p>
+      <div class="n-mosaico">
+        <button class="n-peca" type="button" id="n-painel">
           <span class="cfg-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>
-          <span class="cfg-txt"><strong>Painel de vendas</strong><span id="res-neg-vendas"></span></span>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          <strong>Painel de vendas</strong><span>Gráfico por dia e mais vendidos</span>
+        </button>
+        <button class="n-peca" type="button" id="n-receber">
+          <span class="cfg-ico"><b>R$</b></span>
+          <strong>A receber</strong><b class="n-peca-valor" id="n-receber-valor">R$ 0,00</b><span id="n-receber-sub"></span>
         </button>
       </div>
     </main>
@@ -692,6 +741,7 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
         <button class="cfg-item" type="button" data-sub="backup">
           <span class="cfg-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg></span>
           <span class="cfg-txt"><strong>Backup e dados</strong><span id="res-backup"></span></span>
+          <span class="selo-fazer" id="selo-backup" hidden>Fazer</span>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
         </button>
         <p class="cfg-versao"><span id="versao-uso"></span><button class="link-versao" type="button" id="versao-atualizar" hidden></button></p>
