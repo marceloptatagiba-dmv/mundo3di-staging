@@ -298,7 +298,7 @@
     try { return D.lerRegistros(JSON.parse(localStorage.getItem(CHAVE_REG) || '[]')); } catch (e) { return []; }
   }
   function gravarLista(lista) {
-    try { localStorage.setItem(CHAVE_REG, JSON.stringify(lista)); return true; } catch (e) { avisar('Não deu para salvar'); return false; }
+    try { localStorage.setItem(CHAVE_REG, JSON.stringify(lista)); redesenharInicio(); return true; } catch (e) { avisar('Não deu para salvar'); return false; }
   }
   /* O que está digitado na mesa agora (guardado no registro para "Usar de novo") */
   function entradaAtual() {
@@ -940,7 +940,7 @@
 
   /* ---------- Histórico de orçamentos ---------- */
   var LEMBRETE_BACKUP_ATIVO = true;    // faixa de lembrete de backup no topo do histórico (20 ou mais orçamentos desde o último backup)
-  var histPeriodo = '30', histSituacao = '', histPagamento = '', histBusca = '', histLimite = 50, histTimerBusca;
+  var histPeriodo = '30', histSituacao = '', histPagamento = '', histExtra = {}, histBusca = '', histLimite = 50, histTimerBusca;
   var CHAVE_PERIODO = CHAVE + '-periodo';          // período escolhido (vale para a Lista e para o painel de vendas)
   try { var perSalvo = localStorage.getItem(CHAVE_PERIODO); if (['hoje', '7', '30', 'mes', 'tudo'].indexOf(perSalvo) !== -1) histPeriodo = perSalvo; } catch (e) {}
   var ESPERA = ['pedido', 'enviado', 'vencido', 'producao', 'embalagem', 'pronto'];   // filas de trabalho: sem período, do mais antigo para o mais novo
@@ -957,8 +957,8 @@
   }
   function desenharHist() {
     var todos = lerLista(), hoje = new Date();
-    var espera = ESPERA.indexOf(histSituacao) !== -1 || (!histSituacao && !!histPagamento);
-    var lista = D.filtrarRegistros(todos, { periodo: histPeriodo, situacao: histSituacao, pagamento: histPagamento, busca: histBusca, hoje: hoje });
+    var espera = ESPERA.indexOf(histSituacao) !== -1 || (!histSituacao && !!histPagamento) || !!histExtra.prazoVencido;
+    var lista = D.filtrarRegistros(todos, { periodo: histExtra.prazoVencido ? 'tudo' : histPeriodo, situacao: histSituacao, pagamento: histPagamento, venceEm: histExtra.venceEm, prazoVencido: histExtra.prazoVencido, busca: histBusca, hoje: hoje });
     var res = D.resumir(lista);
     $('hist-n').textContent = String(lista.filter(function (r) { return r.status !== 'pedido'; }).length);   // pedido ainda sem orçamento não conta como enviado
     $('hist-total').textContent = moeda(res.total);
@@ -980,10 +980,11 @@
       b.setAttribute('aria-pressed', String(pg === histPagamento));
       b.textContent = D.ROTULOS_PAGAMENTO[pg] + (cont.pagamento[pg] ? ' ' + cont.pagamento[pg] : '');
     });
-    $('hist-resumo').hidden = !!histSituacao || !!histPagamento;
+    var filtrado = !!histSituacao || !!histPagamento || !!histExtra.prazoVencido;
+    $('hist-resumo').hidden = filtrado;
     var resSit = $('hist-sit-resumo');
-    resSit.hidden = !histSituacao && !histPagamento;
-    if (histSituacao || histPagamento) {
+    resSit.hidden = !filtrado;
+    if (filtrado) {
       var ordem = espera ? ' · mais antigos primeiro' : '';
       resSit.textContent = res.qtd + (res.qtd === 1 ? ' registro' : ' registros') + (res.total > 0 ? ' · ' + moeda(res.total) : '') + ordem;
     }
@@ -1056,10 +1057,10 @@
     b.addEventListener('click', function () { mudarPeriodo(b.dataset.perv); });
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-sit]'), function (b) {
-    b.addEventListener('click', function () { histSituacao = histSituacao === b.dataset.sit ? '' : b.dataset.sit; histLimite = 50; desenharHist(); });
+    b.addEventListener('click', function () { histSituacao = histSituacao === b.dataset.sit ? '' : b.dataset.sit; histExtra = {}; histLimite = 50; desenharHist(); });
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-pag]'), function (b) {
-    b.addEventListener('click', function () { histPagamento = histPagamento === b.dataset.pag ? '' : b.dataset.pag; histLimite = 50; desenharHist(); });
+    b.addEventListener('click', function () { histPagamento = histPagamento === b.dataset.pag ? '' : b.dataset.pag; histExtra = {}; histLimite = 50; desenharHist(); });
   });
   $('hist-mais').addEventListener('click', function () { histLimite += 50; desenharHist(); });
 
@@ -1142,6 +1143,7 @@
     });
   }
   /* Condição de pagamento: ao aprovar (modo 'aprovar') ou depois, pelo detalhe (modo 'mudar') */
+  function soltarChave() { if (folhaDet.hidden) detChave = null; }   // painel aberto fora do detalhe (pelo Início): não deixa o registro preso
   var condModo = 'aprovar', condSel = 'entrega';
   function valorTexto(n) { return String(Math.round(n * 100) / 100).replace('.', ','); }
   function desenharCond(reg) {
@@ -1167,8 +1169,8 @@
     $('folha-cond').hidden = false;
   }
   function fecharCond() { $('folha-cond').hidden = true; }
-  $('cond-fechar').addEventListener('click', fecharCond);
-  $('cond-fundo').addEventListener('click', fecharCond);
+  $('cond-fechar').addEventListener('click', function () { fecharCond(); soltarChave(); });
+  $('cond-fundo').addEventListener('click', function () { fecharCond(); soltarChave(); });
   Array.prototype.forEach.call($('cond-seg').querySelectorAll('button'), function (b) {
     b.addEventListener('click', function () { condSel = b.dataset.cond; var reg = regAberto(); if (reg) desenharCond(reg); });
   });
@@ -1193,6 +1195,7 @@
     var nova = condModo === 'aprovar' ? D.aprovarComCondicao(lista, detChave, c, agora) : D.definirCondicao(lista, detChave, c, agora);
     fecharCond();
     if (gravarLista(nova)) { desenharDetalhe(regAberto()); desenharHist(); avisar(condModo === 'aprovar' ? 'Pedido aprovado' : 'Condição salva'); }
+    soltarChave();
   });
   $('det-cond-mudar').addEventListener('click', function () { var reg = regAberto(); if (reg) { guardarEdicao(); abrirCond(reg, 'mudar'); } });
   /* Registrar recebimento */
@@ -1213,8 +1216,8 @@
   }
   function fecharRec() { $('folha-rec').hidden = true; }
   $('det-rec-novo').addEventListener('click', abrirRec);
-  $('rec-fechar').addEventListener('click', fecharRec);
-  $('rec-fundo').addEventListener('click', fecharRec);
+  $('rec-fechar').addEventListener('click', function () { fecharRec(); soltarChave(); });
+  $('rec-fundo').addEventListener('click', function () { fecharRec(); soltarChave(); });
   selecionarAoFocar($('rec-valor'));
   $('rec-ok').addEventListener('click', function () {
     var v = C.lerNumero($('rec-valor').value);
@@ -1224,6 +1227,7 @@
     var nova = D.registrarRecebimento(lerLista(), detChave, { valor: v, em: dt, forma: recForma });
     fecharRec();
     if (gravarLista(nova)) { desenharDetalhe(regAberto()); desenharHist(); avisar('Recebimento registrado'); }
+    soltarChave();
   });
   /* Etapa (de Aprovado em diante): um botão com a próxima etapa e, em "Mais opções", pular, voltar uma etapa e cancelar */
   function desenharEtapa(reg, hoje) {
@@ -1346,7 +1350,7 @@
     desenharHist();
   }
   function fecharDetalhe() { guardarEdicao(); folhaDet.hidden = true; detChave = null; }
-  function fecharSheetsHist() { folhaDet.hidden = true; folhaExcluir.hidden = true; $('folha-cancelar').hidden = true; $('folha-pedido').hidden = true; $('folha-cond').hidden = true; $('folha-rec').hidden = true; detChave = null; }
+  function fecharSheetsHist() { folhaDet.hidden = true; folhaExcluir.hidden = true; $('folha-cancelar').hidden = true; $('folha-pedido').hidden = true; $('folha-cond').hidden = true; $('folha-rec').hidden = true; $('folha-cobrar').hidden = true; detChave = null; }
   $('det-fechar').addEventListener('click', fecharDetalhe);
   $('det-fundo').addEventListener('click', fecharDetalhe);
   ['det-cliente', 'det-peca'].forEach(function (id) { $(id).addEventListener('change', guardarEdicao); selecionarAoFocar($(id)); });
@@ -1762,7 +1766,7 @@
   Array.prototype.forEach.call(document.querySelectorAll('[data-top]'), function (b) {
     b.addEventListener('click', function () { vTop = b.dataset.top; if (ultimoPainel) desenharTop(ultimoPainel); });
   });
-  function abrirFila(sit) { histSituacao = sit; histLimite = 50; $('hist-busca').value = ''; histBusca = ''; trocarAba('pedidos'); }
+  function abrirFila(sit) { histSituacao = sit; histPagamento = ''; histExtra = {}; histLimite = 50; $('hist-busca').value = ''; histBusca = ''; trocarAba('pedidos'); }
   $('v-ag').addEventListener('click', function () { abrirFila('enviado'); });
   $('v-ve').addEventListener('click', function () { abrirFila('vencido'); });
   $('v-vazio-btn').addEventListener('click', function () { histSituacao = ''; trocarAba('pedidos'); });
@@ -1827,7 +1831,7 @@
      Telas de tarefa (Novo orçamento, Catálogo, Painel de vendas, Orçamentos, subtelas de Mais) empilham, ficam sem a barra de abas e voltam pela seta.
      Cada entrada do histórico guarda { d: quantas entradas há acima do Início, aba: 1 se é uma aba aberta a partir do Início }. */
   var BASE = location.pathname + location.search;
-  var TELA_DA_ROTA = { pedidos: 'hist', historico: 'hist', negocio: 'negocio', vendas: 'vendas', catalogo: 'cat', orcar: 'calc' };
+  var TELA_DA_ROTA = { pedidos: 'hist', historico: 'hist', negocio: 'negocio', tarefas: 'tarefas', vendas: 'vendas', catalogo: 'cat', orcar: 'calc' };
   function hashAtual() { return location.hash.replace(/^#/, ''); }
   function profundidade() { var e = history.state; return e && typeof e.d === 'number' ? e.d : 0; }
   function telaDaRota() {
@@ -1884,6 +1888,7 @@
     fecharEnviado();
     $('tela-inicio').hidden = tela !== 'inicio';
     $('tela-negocio').hidden = tela !== 'negocio';
+    $('tela-tarefas').hidden = tela !== 'tarefas';
     $('tela-calc').hidden = tela !== 'calc';
     $('tela-config').hidden = tela !== 'config';
     $('tela-hist').hidden = tela !== 'hist';
@@ -1902,6 +1907,8 @@
       desenharBackup(); mostrarSub(sub || ''); atualizarBarraConfig();
     } else { fecharPaineisBackup(); $('cfg-barra').hidden = true; }
     if (tela === 'hist') desenharHist(); else fecharSheetsHist();
+    if (tela === 'inicio') desenharInicio();
+    if (tela === 'tarefas') desenharTarefasTodas();
     if (tela === 'vendas') desenharVendas();
     if (tela === 'cat') { $('cat-busca').value = ''; desenharCat(); } else fecharPaineisCat();
     desenharVersao();
@@ -1930,6 +1937,7 @@
   $('voltar').addEventListener('click', function () { voltarTarefa('mais'); });
   $('calc-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
   $('vendas-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
+  $('tar-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
   $('cat-voltar').addEventListener('click', function () { voltarTarefa('mais'); });
   $('cat-abrir').addEventListener('click', function () { irTarefa('catalogo'); });
 
@@ -1944,6 +1952,132 @@
   }
   $('env-fundo').addEventListener('click', fecharEnviado);
   $('env-inicio').addEventListener('click', function () { fecharEnviado(); irInicio(); });
+
+  /* ---------- Início: bloco de vendas, Pra fazer hoje, cobrar ---------- */
+  var CHAVE_OLHO = CHAVE + '-olho';      // '1' = valores escondidos
+  var MES_NOME = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  function olhoEscondido() { try { return localStorage.getItem(CHAVE_OLHO) === '1'; } catch (e) { return false; } }
+  function valorOlho(n) { return olhoEscondido() ? 'R$ ••••' : moeda(n); }
+  function achaPorChave(chave) {
+    var l = lerLista();
+    for (var i = 0; i < l.length; i++) if (D.chaveRegistro(l[i]) === chave) return l[i];
+    return null;
+  }
+  function linhaTarefa(t) {
+    var li = el('div', 'tarefa');
+    var txt = el('span', 'tarefa-txt', t.texto);
+    if (t.valor !== null && t.valor !== undefined) txt.appendChild(el('small', '', valorOlho(t.valor)));
+    var b = el('button', '', t.acao); b.type = 'button';
+    b.setAttribute('aria-label', t.acao + ': ' + t.texto);
+    b.addEventListener('click', function () { executarTarefa(t); });
+    li.appendChild(txt); li.appendChild(b);
+    return li;
+  }
+  function desenharListaTarefas(box, tarefas) {
+    box.textContent = '';
+    if (!tarefas.length) { box.appendChild(el('div', 'tarefa em-dia', '✓ Tudo em dia')); return; }
+    tarefas.forEach(function (t) { box.appendChild(linhaTarefa(t)); });
+  }
+  function desenharInicio() {
+    var todos = lerLista(), hoje = new Date(), pu = D.primeiroUso(todos, lerJSON(CHAVE));
+    var nome = config && config.negocio && config.negocio.nome ? config.negocio.nome : '';
+    $('ini-normal').hidden = pu.primeiroUso; $('ini-boas').hidden = !pu.primeiroUso;
+    $('ini-tarefas').hidden = pu.primeiroUso; $('ini-pronto').hidden = !pu.primeiroUso;
+    if (pu.primeiroUso) {
+      var cx = $('ini-pronto-lista'); cx.textContent = '';
+      pu.itens.forEach(function (it) {
+        var li = el('div', 'tarefa' + (it.feito ? ' feito' : ''));
+        li.appendChild(el('span', 'tarefa-txt', it.texto));
+        if (it.feito) { var ok = el('span', 'ok', '✓'); ok.setAttribute('aria-label', 'feito'); li.appendChild(ok); }
+        var b = el('button', '', it.feito ? 'Ver' : 'Abrir'); b.type = 'button';
+        b.addEventListener('click', function () { irTarefa(it.alvo); });
+        li.appendChild(b); cx.appendChild(li);
+      });
+      return;
+    }
+    var esc = olhoEscondido();
+    $('ini-ola').textContent = nome ? 'Olá, ' + nome : 'Olá!';
+    $('ini-olho').setAttribute('aria-pressed', String(esc));
+    $('ini-olho').setAttribute('aria-label', esc ? 'Mostrar valores' : 'Esconder valores');
+    $('olho-aberto').hidden = esc; $('olho-fechado').hidden = !esc;
+    var r = D.resumoVendas(todos, 'mes', hoje);
+    $('ini-rot').textContent = 'Vendas aprovadas · ' + MES_NOME[hoje.getMonth()];
+    $('ini-valor').textContent = valorOlho(r.vendas);
+    var partes = [];
+    if (r.qtd > 0 && r.variacao !== null) {
+      var n = Math.round(Math.abs(r.variacao));
+      partes.push(n === 0 ? 'igual ao mês passado' : (r.variacao < 0 ? '↓ ' : '↑ ') + (esc ? '••' : n) + '% ' + (r.variacao < 0 ? 'abaixo d' : 'sobre ') + 'o mesmo período do mês passado');
+    }
+    partes.push(r.qtd + (r.qtd === 1 ? ' venda' : ' vendas'));
+    $('ini-delta').textContent = partes.join(' · ');
+    $('ini-lucro').textContent = valorOlho(r.lucro);
+    var ts = D.tarefasHoje(todos, hoje, lerEstadoBackup());
+    $('ini-cont').textContent = ts.length ? String(ts.length) : '';
+    $('ini-ver-todas').hidden = ts.length <= 6;
+    desenharListaTarefas($('ini-lista'), ts.slice(0, 6));
+  }
+  function desenharTarefasTodas() { desenharListaTarefas($('tar-lista'), D.tarefasHoje(lerLista(), new Date(), lerEstadoBackup())); }
+  var inicioPronto = true;   // até aqui (abertura do app) as constantes do Início ainda não existem
+  function redesenharInicio() {
+    if (!inicioPronto) return;
+    if (!$('tela-inicio').hidden) desenharInicio();
+    if (!$('tela-tarefas').hidden) desenharTarefasTodas();
+  }
+  function executarTarefa(t) {
+    var a = t.alvo || {};
+    if (a.tela === 'pedidos') {
+      var f = a.filtro || {};
+      histSituacao = f.situacao || ''; histPagamento = f.pagamento || '';
+      histExtra = { venceEm: f.venceEm, prazoVencido: f.prazoVencido };
+      histBusca = ''; $('hist-busca').value = ''; histLimite = 50;
+      irAba('pedidos');
+    } else if (a.tela === 'config-backup') irTarefa('config-backup');
+    else if (a.tela === 'cobrar') abrirCobrar(t.chave);
+    else if (a.tela === 'recebimento') {
+      var reg = achaPorChave(t.chave); if (!reg) return;
+      detChave = t.chave; desenharDetalhe(reg); abrirRec();
+    }
+  }
+  $('ini-olho').addEventListener('click', function () {
+    try { localStorage.setItem(CHAVE_OLHO, olhoEscondido() ? '0' : '1'); } catch (e) {}
+    desenharInicio();
+  });
+  $('ini-vendas-btn').addEventListener('click', function () { irAba('negocio'); });
+  $('ini-fazer').addEventListener('click', function () { irTarefa('orcar'); });
+  $('ini-ver-todas').addEventListener('click', function () { irTarefa('tarefas'); });
+
+  /* Cobrar resposta: mensagem pronta e editável, compartilhada pelo celular (ou copiada) */
+  var cobChave = null;
+  function abrirCobrar(chave) {
+    var reg = achaPorChave(chave); if (!reg) return;
+    cobChave = chave;
+    $('cob-info').textContent = (reg.cliente || 'Sem cliente') + ' · Nº ' + C.formatarNumero(reg.n) + ' · enviado em ' + dm(reg.ts) + ' · ' + moeda(reg.total);
+    $('cob-msg').value = D.mensagemCobranca(reg);
+    $('folha-cobrar').hidden = false;
+  }
+  function fecharCobrar() { $('folha-cobrar').hidden = true; }
+  $('cob-fechar').addEventListener('click', fecharCobrar);
+  $('cob-fundo').addEventListener('click', fecharCobrar);
+  function cobrancaFeita(msg) {
+    if (cobChave) gravarLista(D.registrarCobranca(lerLista(), cobChave, new Date()));
+    fecharCobrar(); avisar(msg);
+  }
+  $('cob-enviar').addEventListener('click', function () {
+    var texto = $('cob-msg').value.trim(); if (!texto) { avisar('Escreva a mensagem'); return; }
+    if (navigator.share) { navigator.share({ text: texto }).then(function () { cobrancaFeita('Cobrança registrada'); }, function () {}); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(function () { cobrancaFeita('Mensagem copiada'); }, function () { avisar('Não deu para copiar'); });
+    } else avisar('Este aparelho não deixa compartilhar nem copiar');
+  });
+  $('cob-aprovado').addEventListener('click', function () {
+    var reg = achaPorChave(cobChave); if (!reg) return;
+    fecharCobrar(); detChave = cobChave; desenharDetalhe(reg); abrirCond(reg, 'aprovar');
+  });
+  $('cob-recusado').addEventListener('click', function () {
+    if (!cobChave) return;
+    var ok = gravarLista(D.atualizarRegistro(lerLista(), cobChave, { status: 'recusado' }));
+    fecharCobrar(); if (ok) avisar('Orçamento recusado');
+  });
 
   /* ---------- Convite para instalar ---------- */
   var instalado = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
