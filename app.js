@@ -246,12 +246,20 @@
   ePeso.addEventListener('click', function () { if (multicorAtivo) abrirCores(); });
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !folhaCores.hidden) fecharCores(); });
 
-  $('limpar').addEventListener('click', function () {
-    outraAberta = false; exato = {}; vinculo = null;
+  function limparMesa() {
+    outraAberta = false; exato = {}; vinculo = null; pedidoVinculo = null;
     purgaTxt = ''; cores.forEach(function (c) { c.g = ''; });
     ePeso.value = ''; eTempo.value = ''; eQtd.value = '1'; eExtras.value = ''; eMargem.value = String(C.PADROES.margemPct);
-    atualizar(); ePeso.focus();
-  });
+    atualizar(); desenharVinculoPedido();
+  }
+  $('limpar').addEventListener('click', function () { limparMesa(); ePeso.focus(); });
+  /* Pedido sendo orçado: título "Orçar pedido" e o selo com o cliente (o × desfaz o vínculo: o envio cria um registro novo) */
+  function desenharVinculoPedido() {
+    $('calc-titulo').textContent = pedidoVinculo ? 'Orçar pedido' : 'Novo orçamento';
+    $('calc-sub').hidden = !pedidoVinculo;
+    $('calc-sub-txt').textContent = pedidoVinculo ? 'Pedido de ' + (pedidoVinculo.cliente || 'cliente sem nome') : '';
+  }
+  $('pedido-desvincular').addEventListener('click', function () { pedidoVinculo = null; desenharVinculoPedido(); });
 
   /* ---------- Copiar valor ---------- */
   function copiarTexto(txt) {
@@ -308,14 +316,20 @@
   }
   /* Grava o envio novo: avança o contador e guarda o registro com data e hora. Chamado só quando o envio aconteceu. */
   function registrarEnvio(numero, formato, extra) {
-    var reg = D.novoRegistro(extra.orcamento, { numero: numero, formato: formato, material: extra.material, cliente: extra.cliente,
+    var opcoes = { numero: numero, formato: formato, material: extra.material, cliente: extra.cliente,
       descricao: extra.descricao, entrada: extra.entrada, prazo: extra.prazo, validadeAte: extra.validadeAte, versaoApp: versaoEmUso,
-      catalogoId: pecaVinculada() ? vinculo.id : '' });
+      catalogoId: pecaVinculada() ? vinculo.id : '' };
+    var reg = D.novoRegistro(extra.orcamento, opcoes);
     try {
       localStorage.setItem(CHAVE_CONT, String(numero));
-      var lista = JSON.parse(localStorage.getItem(CHAVE_REG) || '[]');
-      localStorage.setItem(CHAVE_REG, JSON.stringify(D.adicionarRegistro(lista, reg, D.MAX_REGISTROS)));
+      if (pedidoVinculo) {   // pedido anotado antes: o MESMO registro passa a Orçado (ganha Nº, data e valores)
+        localStorage.setItem(CHAVE_REG, JSON.stringify(D.orcarPedido(lerLista(), pedidoVinculo.chave, extra.orcamento, opcoes).lista));
+      } else {
+        var lista = JSON.parse(localStorage.getItem(CHAVE_REG) || '[]');
+        localStorage.setItem(CHAVE_REG, JSON.stringify(D.adicionarRegistro(lista, reg, D.MAX_REGISTROS)));
+      }
     } catch (e) { /* armazenamento indisponível: o envio continua valendo, só não fica registrado */ }
+    if (pedidoVinculo) { pedidoVinculo = null; desenharVinculoPedido(); }
     /* Peça do catálogo: o valor enviado vira a referência e ela sobe de uso */
     if (reg.catalogoId) gravarCatalogo(D.registrarUsoPeca(lerCatalogo(), reg.catalogoId, reg.valorPeca, new Date(reg.ts)));
     mostrarEnviado(numero);
@@ -329,6 +343,7 @@
   }
 
   /* ---------- Enviar orçamento: painel com Texto ou Imagem ---------- */
+  var pedidoVinculo = null;   // pedido que está sendo orçado: { chave, cliente, descricao }
   var folha = $('folha'), eCliente = $('env-cliente'), eImgDesc = $('img-descricao'), eImgPrazo = $('img-prazo');
   var imagem = null;            // { arquivo, url, numero, data, validadeAte } — imagem já pronta para enviar
   var tokenImagem = 0, timerImagem;
@@ -356,8 +371,9 @@
   function abrirFolha(reg) {
     envioReg = reg || null;
     if (!envioReg && (!ultimoOrcamento || ultimoOrcamento.valorCobrar <= 0)) { avisar('Preencha peso e tempo primeiro'); return; }
-    eCliente.value = envioReg ? envioReg.cliente : '';
-    eImgDesc.value = envioReg ? envioReg.descricao : (pecaVinculada() ? D.descricaoDaPeca(pecaVinculada()) : '');
+    if (!envioReg && !pedidoVinculo && D.estadoLimite(lerLista()).cheio) { avisar(D.estadoLimite(lerLista()).texto); return; }
+    eCliente.value = envioReg ? envioReg.cliente : (pedidoVinculo ? pedidoVinculo.cliente : '');
+    eImgDesc.value = envioReg ? envioReg.descricao : (pedidoVinculo ? pedidoVinculo.descricao : pecaVinculada() ? D.descricaoDaPeca(pecaVinculada()) : '');
     eImgPrazo.value = envioReg && envioReg.prazo ? envioReg.prazo : config.negocio.prazo;
     $('painel-imagem').hidden = true; $('abrir-imagem').setAttribute('aria-pressed', 'false');
     $('folha-rotulo').textContent = envioReg ? 'Reenviar orçamento' : 'Enviar orçamento';
@@ -927,7 +943,10 @@
   var histPeriodo = '30', histSituacao = '', histBusca = '', histLimite = 50, histTimerBusca;
   var CHAVE_PERIODO = CHAVE + '-periodo';          // período escolhido (vale para a Lista e para o painel de vendas)
   try { var perSalvo = localStorage.getItem(CHAVE_PERIODO); if (['hoje', '7', '30', 'mes', 'tudo'].indexOf(perSalvo) !== -1) histPeriodo = perSalvo; } catch (e) {}
-  var ROTULO_SIT = { enviado: 'Enviado', vencido: 'Vencido', aprovado: 'Aprovado', recusado: 'Recusado' };
+  var ESPERA = ['pedido', 'enviado', 'vencido', 'producao', 'embalagem', 'pronto'];   // filas de trabalho: sem período, do mais antigo para o mais novo
+  var CONTAR_NO_CHIP = ['pedido', 'enviado', 'vencido', 'pronto'];                    // chips de ação mostram a contagem
+  var CANAL_ROT = { whatsapp: 'WhatsApp', instagram: 'Instagram', presencial: 'Presencial', outro: 'Outro' };
+  function rotuloEtapa(st) { return (st === 'entregue' ? '✓ ' : '') + D.ROTULOS_ETAPA[st]; }
   var detChave = null;                 // orçamento aberto no detalhe
 
   function el(tag, cls, txt) {
@@ -938,10 +957,10 @@
   }
   function desenharHist() {
     var todos = lerLista(), hoje = new Date();
-    var espera = histSituacao === 'enviado' || histSituacao === 'vencido';   // fila de quem aguarda resposta: sem período, do mais antigo para o mais novo
+    var espera = ESPERA.indexOf(histSituacao) !== -1;
     var lista = D.filtrarRegistros(todos, { periodo: histPeriodo, situacao: histSituacao, busca: histBusca, hoje: hoje });
     var res = D.resumir(lista);
-    $('hist-n').textContent = String(res.qtd);
+    $('hist-n').textContent = String(lista.filter(function (r) { return r.status !== 'pedido'; }).length);   // pedido ainda sem orçamento não conta como enviado
     $('hist-total').textContent = moeda(res.total);
     var apr = D.aprovadosDoPeriodo(todos, { periodo: histPeriodo, busca: histBusca, hoje: hoje });   // aprovados pela data da aprovação (a mesma regra do painel de vendas)
     $('hist-apr').textContent = String(apr.aprovados);
@@ -949,11 +968,11 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.per === histPeriodo));
     });
-    var cont = D.contarSituacoes(todos, hoje);
+    var cont = D.contarEtapas(todos, hoje);
     Array.prototype.forEach.call(document.querySelectorAll('[data-sit]'), function (b) {
       var st = b.dataset.sit;
       b.setAttribute('aria-pressed', String(st === histSituacao));
-      b.textContent = ROTULO_SIT[st] + (cont[st] ? ' ' + cont[st] : '');
+      b.textContent = D.ROTULOS_ETAPA[st] + (CONTAR_NO_CHIP.indexOf(st) !== -1 && cont[st] ? ' ' + cont[st] : '');
     });
     $('hist-per').hidden = espera;
     $('hist-resumo').hidden = !!histSituacao;
@@ -961,7 +980,7 @@
     resSit.hidden = !histSituacao;
     if (histSituacao) {
       var ordem = espera ? ' · mais antigos primeiro' : '';
-      resSit.textContent = res.qtd + (res.qtd === 1 ? ' orçamento' : ' orçamentos') + ' · ' + moeda(res.total) + ordem;
+      resSit.textContent = res.qtd + (res.qtd === 1 ? ' registro' : ' registros') + (res.total > 0 ? ' · ' + moeda(res.total) : '') + ordem;
     }
     var ultimoBackup = lerEstadoBackup();
     var lemb = LEMBRETE_BACKUP_ATIVO ? D.precisaLembreteBackup(todos, ultimoBackup) : { mostrar: false, qtd: 0 };
@@ -972,12 +991,14 @@
     var vazio = $('hist-vazio');
     if (!lista.length) {
       vazio.hidden = false;
-      vazio.textContent = !todos.length ? 'Nenhum orçamento enviado ainda. Cada envio, em texto ou imagem, aparece aqui.'
+      vazio.textContent = !todos.length ? 'Nenhum pedido ainda. Toque em + Pedido para anotar um, ou em + Orçar para fazer um orçamento.'
         : histBusca ? 'Nada encontrado para “' + histBusca + '”.'
         : histSituacao === 'enviado' ? 'Nenhum orçamento aguardando resposta.'
         : histSituacao === 'vencido' ? 'Nenhum orçamento vencido.'
-        : histSituacao ? 'Nenhum orçamento ' + (histSituacao === 'aprovado' ? 'aprovado' : 'recusado') + ' neste período. Toque em Tudo para ver todos.'
-        : 'Nenhum orçamento neste período. Toque em Tudo para ver todos.';
+        : histSituacao === 'pedido' ? 'Nenhum pedido para orçar.'
+        : espera ? 'Nada em ' + D.ROTULOS_ETAPA[histSituacao] + ' agora.'
+        : histSituacao ? 'Nada em ' + D.ROTULOS_ETAPA[histSituacao] + ' neste período. Toque em Tudo para ver todos.'
+        : 'Nada neste período. Toque em Tudo para ver todos.';
     } else { vazio.hidden = true; }
     var grupos = espera ? [{ rotulo: '', itens: lista.slice(0, histLimite) }] : D.agruparPorDia(lista.slice(0, histLimite), hoje);
     grupos.forEach(function (g) {
@@ -986,17 +1007,19 @@
       g.itens.forEach(function (r) {
         var it = el('button', 'item'); it.type = 'button';
         var meio = el('span', 'meio');
-        meio.appendChild(el('span', 'sup', 'Nº ' + C.formatarNumero(r.n) + ' · ' + D.hora(r.ts) + ' · ' + (r.formato === 'imagem' ? 'Imagem' : 'Texto')));
+        meio.appendChild(el('span', 'sup', r.n > 0 ? 'Nº ' + C.formatarNumero(r.n) + ' · ' + D.hora(r.ts) + ' · ' + (r.formato === 'imagem' ? 'Imagem' : 'Texto')
+          : 'Pedido · ' + D.hora(r.ts) + (r.canal ? ' · ' + CANAL_ROT[r.canal] : '')));
         meio.appendChild(el('strong', r.cliente ? '' : 'sem', r.cliente || 'Sem cliente'));
         meio.appendChild(el('span', 'peca', D.descricaoLinha(r)));
         var dir = el('span', 'dir');
-        dir.appendChild(el('b', '', moeda(r.total)));
-        if (espera) {
+        var st = D.situacao(r, hoje);
+        if (r.status === 'pedido') { if (r.prazoDesejado) dir.appendChild(el('b', '', 'prazo ' + D.validadeCurta(r.prazoDesejado, hoje))); }
+        else dir.appendChild(el('b', '', moeda(r.total)));
+        if (espera && (st === 'enviado' || st === 'vencido')) {
           var te = D.textoEspera(r, hoje);
           dir.appendChild(el('span', 'pill ' + (te.antigo ? 'vencido' : 'enviado'), te.texto));
         } else {
-          var st = D.situacao(r, hoje);
-          dir.appendChild(el('span', 'pill ' + st, D.ROTULOS_SITUACAO[st]));
+          dir.appendChild(el('span', 'pill ' + st, rotuloEtapa(st)));
         }
         it.appendChild(meio); it.appendChild(dir);
         it.addEventListener('click', function () { abrirDetalhe(r); });
@@ -1035,27 +1058,147 @@
     return null;
   }
   function dm(iso) { var d = new Date(iso); return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2); }
+  function diasDesdeISO(iso, hoje) {
+    var x = new Date(iso), y = new Date(hoje); x.setHours(0, 0, 0, 0); y.setHours(0, 0, 0, 0);
+    return Math.round((y - x) / 86400000);
+  }
+  function textoHa(d) { return d <= 0 ? 'hoje' : d === 1 ? 'há 1 dia' : 'há ' + d + ' dias'; }
+  function mostrarSo(id, sim) { $(id).hidden = !sim; }
   function desenharDetalhe(reg) {
     var hoje = new Date(), st = D.situacao(reg, hoje);
-    $('det-numero').textContent = 'Nº ' + C.formatarNumero(reg.n);
-    var sub = D.descreverEnvio(reg, hoje);
-    if (reg.validadeAte) sub += ' · validade até ' + D.validadeCurta(reg.validadeAte, hoje);
-    if (reg.reenvios > 0) sub += ' · reenviado ' + reg.reenvios + (reg.reenvios === 1 ? ' vez' : ' vezes');
+    var pedido = reg.status === 'pedido', venda = D.ehVenda(reg.status), cancelado = reg.status === 'cancelado';
+    $('det-tit-rot').textContent = pedido ? 'Pedido' : 'Orçamento';
+    $('det-numero').textContent = pedido ? '' : 'Nº ' + C.formatarNumero(reg.n);
+    var sub;
+    if (pedido) sub = 'Anotado ' + (diasDesdeISO(reg.ts, hoje) <= 0 ? 'hoje' : 'em ' + dm(reg.ts)) + ' às ' + D.hora(reg.ts) + (reg.canal ? ' · ' + CANAL_ROT[reg.canal] : '');
+    else {
+      sub = D.descreverEnvio(reg, hoje);
+      if (reg.validadeAte) sub += ' · validade até ' + D.validadeCurta(reg.validadeAte, hoje);
+      if (reg.reenvios > 0) sub += ' · reenviado ' + reg.reenvios + (reg.reenvios === 1 ? ' vez' : ' vezes');
+    }
+    if (reg.prazoDesejado) sub += ' · prazo desejado ' + D.validadeCurta(reg.prazoDesejado, hoje);
     $('det-sub').textContent = sub;
     $('det-cliente').value = reg.cliente; $('det-peca').value = reg.descricao;
+    var texto = reg.pedidoTexto && reg.pedidoTexto !== reg.descricao ? reg.pedidoTexto : '';
+    $('det-texto').textContent = texto; mostrarSo('det-texto', pedido && !!texto);
     $('det-qtd').textContent = reg.qtd > 1 ? reg.qtd + ' × ' + moeda(reg.valorPeca) : '1 peça';
     var mat = D.materialDoRegistro(reg);
     $('det-mat').textContent = [mat, reg.entrada ? 'margem ' + num(reg.entrada.margem) + '%' : ''].filter(Boolean).join(' · ');
     $('det-total').textContent = moeda(reg.total);
     $('det-custo').textContent = moeda(reg.custoTotal);
     $('det-lucro').textContent = moeda(reg.lucro);
+    ['det-linha-total', 'det-interno', 'det-acoes-orc', 'det-catalogo'].forEach(function (id) { mostrarSo(id, !pedido); });
+    mostrarSo('det-bloco-pedido', pedido);
+    mostrarSo('det-bloco-seg', st === 'enviado' || st === 'vencido' || reg.status === 'aprovado' || reg.status === 'recusado');
+    mostrarSo('det-bloco-etapa', venda || cancelado);
     Array.prototype.forEach.call($('det-seg').querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.st === reg.status)); });
     $('det-st-info').textContent = st === 'vencido' ? 'Venceu em ' + D.validadeCurta(reg.validadeAte, hoje) + '. Marque Aprovado ou Recusado quando o cliente responder.'
-      : reg.statusEm && reg.status !== 'enviado' ? D.ROTULOS_SITUACAO[reg.status] + ' em ' + dm(reg.statusEm) : '';
-    $('det-antigo').hidden = !!reg.entrada;
+      : reg.statusEm && reg.status !== 'enviado' ? D.ROTULOS_ETAPA[reg.status] + ' em ' + dm(reg.statusEm) : '';
+    if (venda || cancelado) desenharEtapa(reg, hoje);
+    $('det-antigo').hidden = pedido || !!reg.entrada;
     $('det-usar').disabled = !reg.entrada;
     $('det-catalogo').disabled = !reg.entrada;  // registro antigo, sem os dados da mesa, não vira peça
+    $('det-excluir').textContent = 'Excluir';
   }
+  /* Etapa (de Aprovado em diante): um botão com a próxima etapa e, em "Mais opções", pular, voltar uma etapa e cancelar */
+  function desenharEtapa(reg, hoje) {
+    var st = reg.status, pill = $('det-etapa-pill');
+    pill.className = 'pill ' + st; pill.textContent = rotuloEtapa(st);
+    var d = diasDesdeISO(reg.statusEm || reg.ts, hoje);
+    $('det-etapa-info').textContent = st === 'cancelado' ? 'Cancelado ' + textoHa(d) : d <= 0 ? 'desde hoje em ' + D.ROTULOS_ETAPA[st] : textoHa(d) + ' em ' + D.ROTULOS_ETAPA[st];
+    var prox = D.proximaEtapa(st), ant = D.etapaAnterior(reg), btn = $('det-avancar');
+    if (st === 'cancelado') { btn.hidden = !ant; btn.dataset.acao = ant || ''; btn.textContent = ant ? 'Reabrir (volta para ' + D.ROTULOS_ETAPA[ant] + ')' : ''; }
+    else { btn.hidden = !prox; btn.dataset.acao = prox || ''; btn.textContent = prox ? 'Avançar para ' + D.ROTULOS_ETAPA[prox] : ''; }
+    var box = $('det-opcoes'); box.textContent = ''; box.hidden = true;
+    $('det-mais-op').setAttribute('aria-expanded', 'false');
+    var ops = [];
+    if (st !== 'cancelado') {
+      D.etapasSeguintes(st).slice(1).forEach(function (e) { ops.push({ etapa: e, texto: 'Pular para ' + D.ROTULOS_ETAPA[e] }); });
+      if (ant) ops.push({ etapa: ant, texto: 'Voltar para ' + D.ROTULOS_ETAPA[ant] });
+      if (st !== 'entregue') ops.push({ etapa: 'cancelado', texto: 'Cancelar pedido', perigo: true });
+    }
+    ops.forEach(function (o) {
+      var b = el('button', 'btn mais peq' + (o.perigo ? ' perigo' : ''), o.texto); b.type = 'button';
+      b.addEventListener('click', function () { irParaEtapa(o.etapa); });
+      box.appendChild(b);
+    });
+    $('det-mais-op').hidden = !ops.length;
+  }
+  function irParaEtapa(etapa) {
+    var reg = regAberto(); if (!reg) return;
+    guardarEdicao();
+    if (etapa === 'cancelado') { pedirCancelar(reg); return; }
+    if (gravarLista(D.mudarEtapa(lerLista(), detChave, etapa, new Date()))) { desenharDetalhe(regAberto()); desenharHist(); }
+  }
+  $('det-avancar').addEventListener('click', function () { var e = $('det-avancar').dataset.acao; if (e) irParaEtapa(e); });
+  $('det-mais-op').addEventListener('click', function () {
+    var abrir = $('det-opcoes').hidden;
+    $('det-opcoes').hidden = !abrir; $('det-mais-op').setAttribute('aria-expanded', String(abrir));
+  });
+  /* Cancelar: pede confirmação; o registro fica na lista como Cancelado */
+  function pedirCancelar(reg) {
+    $('cancelar-txt').textContent = reg.status === 'pedido' ? 'O pedido fica na lista como Cancelado, para você consultar depois.'
+      : 'O pedido fica na lista como Cancelado e deixa de contar nas vendas. Você pode reabrir se mudar de ideia.';
+    $('folha-cancelar').hidden = false;
+  }
+  function fecharCancelar() { $('folha-cancelar').hidden = true; }
+  $('cancelar-nao').addEventListener('click', fecharCancelar);
+  $('cancelar-fundo').addEventListener('click', fecharCancelar);
+  $('cancelar-sim').addEventListener('click', function () {
+    fecharCancelar();
+    if (!detChave) return;
+    if (gravarLista(D.cancelarPedido(lerLista(), detChave, false, new Date()))) { desenharDetalhe(regAberto()); desenharHist(); avisar('Pedido cancelado'); }
+  });
+  $('det-ped-cancelar').addEventListener('click', function () { var reg = regAberto(); if (reg) { guardarEdicao(); pedirCancelar(reg); } });
+
+  /* Orçar este pedido: abre o Novo orçamento só com a quantidade preenchida (o resto da mesa é zerado para não misturar com outro orçamento) */
+  $('det-orcar').addEventListener('click', function () {
+    guardarEdicao();
+    var reg = regAberto(); if (!reg || reg.status !== 'pedido') return;
+    fecharSheetsHist();
+    limparMesa();
+    pedidoVinculo = { chave: D.chaveRegistro(reg), cliente: reg.cliente, descricao: reg.descricao };
+    eQtd.value = String(reg.qtd || 1);
+    atualizar(); desenharVinculoPedido();
+    irTarefa('orcar');
+  });
+
+  /* Anotar pedido */
+  var pedCanal = '';
+  function desenharCanalPedido() {
+    Array.prototype.forEach.call($('ped-canal').querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.canal === pedCanal)); });
+  }
+  Array.prototype.forEach.call($('ped-canal').querySelectorAll('button'), function (b) {
+    b.addEventListener('click', function () { pedCanal = pedCanal === b.dataset.canal ? '' : b.dataset.canal; desenharCanalPedido(); });
+  });
+  function abrirPedido() {
+    var lim = D.estadoLimite(lerLista());
+    if (lim.cheio) { avisar(lim.texto); return; }
+    $('ped-cliente').value = ''; $('ped-texto').value = ''; $('ped-qtd').value = '1'; $('ped-prazo').value = ''; pedCanal = ''; desenharCanalPedido();
+    $('folha-pedido').hidden = false;
+    $('ped-texto').focus();
+  }
+  function fecharPedido() { $('folha-pedido').hidden = true; }
+  $('ped-novo').addEventListener('click', abrirPedido);
+  $('ped-fechar').addEventListener('click', fecharPedido);
+  $('ped-fundo').addEventListener('click', fecharPedido);
+  selecionarAoFocar($('ped-qtd'));
+  $('ped-salvar').addEventListener('click', function () {
+    var cliente = D.limparTexto($('ped-cliente').value, 60), texto = D.limparTexto($('ped-texto').value, D.MAX_TEXTO_PEDIDO);
+    if (!cliente && !texto) { avisar('Escreva o cliente ou o que foi pedido'); return; }
+    var lista = lerLista(), lim = D.estadoLimite(lista);
+    if (lim.cheio) { avisar(lim.texto); return; }
+    var reg = D.novoPedido({ cliente: cliente, texto: texto, qtd: C.lerQuantidade($('ped-qtd').value), prazoDesejado: $('ped-prazo').value, canal: pedCanal }, new Date());
+    if (!gravarLista(D.adicionarRegistro(lista, reg, D.MAX_REGISTROS))) return;
+    fecharPedido();
+    histSituacao = ''; histBusca = ''; $('hist-busca').value = ''; histLimite = 50;
+    desenharHist();
+    avisar('Pedido anotado');
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (!$('folha-cancelar').hidden) fecharCancelar(); else if (!$('folha-pedido').hidden) fecharPedido();
+  });
   function abrirDetalhe(reg) {
     detChave = D.chaveRegistro(reg);
     desenharDetalhe(reg);
@@ -1070,7 +1213,7 @@
     desenharHist();
   }
   function fecharDetalhe() { guardarEdicao(); folhaDet.hidden = true; detChave = null; }
-  function fecharSheetsHist() { folhaDet.hidden = true; folhaExcluir.hidden = true; detChave = null; }
+  function fecharSheetsHist() { folhaDet.hidden = true; folhaExcluir.hidden = true; $('folha-cancelar').hidden = true; $('folha-pedido').hidden = true; detChave = null; }
   $('det-fechar').addEventListener('click', fecharDetalhe);
   $('det-fundo').addEventListener('click', fecharDetalhe);
   ['det-cliente', 'det-peca'].forEach(function (id) { $(id).addEventListener('change', guardarEdicao); selecionarAoFocar($(id)); });
@@ -1104,15 +1247,16 @@
   });
   $('det-excluir').addEventListener('click', function () {
     var reg = regAberto(); if (!reg) return;
-    $('excluir-txt').textContent = 'O orçamento Nº ' + C.formatarNumero(reg.n) + ' sai do histórico. O número dele não volta: o próximo orçamento continua de onde parou.';
+    $('excluir-txt').textContent = reg.status === 'pedido' ? 'O pedido sai da lista.' : 'O orçamento Nº ' + C.formatarNumero(reg.n) + ' sai da lista. O número dele não volta: o próximo orçamento continua de onde parou.';
     folhaExcluir.hidden = false;
   });
   function fecharExcluir() { folhaExcluir.hidden = true; }
+  function detTipoExcluido() { return 'Excluído'; }
   $('excluir-nao').addEventListener('click', fecharExcluir);
   $('excluir-fundo').addEventListener('click', fecharExcluir);
   $('excluir-sim').addEventListener('click', function () {
     if (!detChave) return;
-    if (gravarLista(D.excluirRegistro(lerLista(), detChave))) { fecharSheetsHist(); desenharHist(); avisar('Orçamento excluído'); }
+    if (gravarLista(D.excluirRegistro(lerLista(), detChave))) { fecharSheetsHist(); desenharHist(); avisar(detTipoExcluido()); }
   });
   document.addEventListener('keydown', function (ev) {
     if (ev.key !== 'Escape') return;
@@ -1398,7 +1542,6 @@
   var vTop = 'clientes';                       // Mais vendidos: 'clientes' | 'pecas'
   var ROTULO_PERIODO = { hoje: 'Hoje', '7': '7 dias', '30': '30 dias', mes: 'Este mês', tudo: 'Tudo' };
   var ROTULO_ANTERIOR = { '7': 'os 7 dias anteriores', '30': 'os 30 dias anteriores', mes: 'o mesmo período do mês passado' };
-  var origemHist = '';                         // 'vendas' = o Histórico foi aberto pelo painel (o voltar da tela volta ao painel)
   function pct(n) { return String(n).replace('.', ',') + '%'; }
   function rotuloEixo(v) { return /^\d{4}-\d{2}-\d{2}$/.test(v.chave) ? v.chave.slice(8) + '/' + v.chave.slice(5, 7) : v.rotulo; }
 
@@ -1485,16 +1628,11 @@
   Array.prototype.forEach.call(document.querySelectorAll('[data-top]'), function (b) {
     b.addEventListener('click', function () { vTop = b.dataset.top; if (ultimoPainel) desenharTop(ultimoPainel); });
   });
-  function abrirFila(sit) { histSituacao = sit; origemHist = 'vendas'; histLimite = 50; $('hist-busca').value = ''; histBusca = ''; trocarAba('historico'); }
+  function abrirFila(sit) { histSituacao = sit; histLimite = 50; $('hist-busca').value = ''; histBusca = ''; trocarAba('pedidos'); }
   $('v-ag').addEventListener('click', function () { abrirFila('enviado'); });
   $('v-ve').addEventListener('click', function () { abrirFila('vencido'); });
-  $('v-vazio-btn').addEventListener('click', function () { origemHist = ''; histSituacao = ''; trocarAba('historico'); });
-  $('hist-ver-painel').addEventListener('click', function () { trocarAba('vendas'); });
-  Array.prototype.forEach.call(document.querySelectorAll('[data-aba]'), function (b) {
-    b.addEventListener('click', function () {
-      if (b.dataset.aba === 'vendas') trocarAba('vendas'); else { origemHist = ''; histSituacao = ''; trocarAba('historico'); }
-    });
-  });
+  $('v-vazio-btn').addEventListener('click', function () { histSituacao = ''; trocarAba('pedidos'); });
+  $('hist-ver-painel').addEventListener('click', function () { irTarefa('vendas'); });
 
   /* ---------- Configurações em lista e subtelas (0.5.3) ----------
      Todos os campos continuam no mesmo formulário (só mostrar/esconder): ir e voltar entre a lista e as subtelas não perde nada do que foi digitado. */
@@ -1545,7 +1683,6 @@
     b.addEventListener('click', function () {
       var destino = b.dataset.ir;
       sairDaConfig(function () {
-        if (destino === 'historico') { histSituacao = ''; origemHist = ''; histLimite = 50; }
         irTarefa(destino);
       });
     });
@@ -1556,7 +1693,7 @@
      Telas de tarefa (Novo orçamento, Catálogo, Painel de vendas, Orçamentos, subtelas de Mais) empilham, ficam sem a barra de abas e voltam pela seta.
      Cada entrada do histórico guarda { d: quantas entradas há acima do Início, aba: 1 se é uma aba aberta a partir do Início }. */
   var BASE = location.pathname + location.search;
-  var TELA_DA_ROTA = { pedidos: 'pedidos', negocio: 'negocio', historico: 'hist', vendas: 'vendas', catalogo: 'cat', orcar: 'calc' };
+  var TELA_DA_ROTA = { pedidos: 'hist', historico: 'hist', negocio: 'negocio', vendas: 'vendas', catalogo: 'cat', orcar: 'calc' };
   function hashAtual() { return location.hash.replace(/^#/, ''); }
   function profundidade() { var e = history.state; return e && typeof e.d === 'number' ? e.d : 0; }
   function telaDaRota() {
@@ -1564,7 +1701,7 @@
     if (h === 'config' || h === 'mais' || subDaRota()) return 'config';
     return Object.prototype.hasOwnProperty.call(TELA_DA_ROTA, h) ? TELA_DA_ROTA[h] : 'inicio';   // rota desconhecida abre o Início
   }
-  function abaDaTela(t, sub) { return t === 'inicio' || t === 'pedidos' || t === 'negocio' ? t : t === 'config' && !sub ? 'mais' : ''; }
+  function abaDaTela(t, sub) { return t === 'inicio' || t === 'negocio' ? t : t === 'hist' ? 'pedidos' : t === 'config' && !sub ? 'mais' : ''; }
   /* Troca entre Lista e Vendas (e vai da fila do painel ao Histórico) sem empilhar tela */
   function trocarAba(destino) { history.replaceState(history.state, '', BASE + '#' + destino); rota(); }
   function irTarefa(h) { history.pushState({ d: profundidade() + 1 }, '', BASE + '#' + h); rota(); }
@@ -1612,7 +1749,6 @@
   function mostrar(tela, sub) {
     fecharEnviado();
     $('tela-inicio').hidden = tela !== 'inicio';
-    $('tela-pedidos').hidden = tela !== 'pedidos';
     $('tela-negocio').hidden = tela !== 'negocio';
     $('tela-calc').hidden = tela !== 'calc';
     $('tela-config').hidden = tela !== 'config';
@@ -1659,9 +1795,6 @@
   });
   $('voltar').addEventListener('click', function () { voltarTarefa('mais'); });
   $('calc-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
-  $('hist-voltar').addEventListener('click', function () {
-    if (origemHist === 'vendas') { origemHist = ''; histSituacao = ''; trocarAba('vendas'); } else voltarTarefa('inicio');   // aberto pela fila do painel: volta ao painel
-  });
   $('vendas-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
   $('cat-voltar').addEventListener('click', function () { voltarTarefa('mais'); });
   $('cat-abrir').addEventListener('click', function () { irTarefa('catalogo'); });
@@ -1732,7 +1865,8 @@
   function estadoParaRetomar() {
     return { peso: ePeso.value, tempo: eTempo.value, qtd: eQtd.value, extras: eExtras.value, margem: eMargem.value, outra: outraAberta,
       multicor: multicorAtivo, cores: cores.map(function (c) { return { id: c.id, g: c.g }; }), purga: purgaTxt,
-      vinculo: vinculo ? { id: vinculo.id, nome: vinculo.nome } : null };
+      vinculo: vinculo ? { id: vinculo.id, nome: vinculo.nome } : null,
+      pedido: pedidoVinculo ? { chave: pedidoVinculo.chave, cliente: pedidoVinculo.cliente, descricao: pedidoVinculo.descricao } : null };
   }
   function retomarCampos() {
     var d = null;
@@ -1743,6 +1877,7 @@
     eMargem.value = txt(d.margem) || String(C.PADROES.margemPct);
     outraAberta = d.outra === true;
     purgaTxt = txt(d.purga);
+    if (d.pedido && typeof d.pedido.chave === 'string' && d.pedido.chave) pedidoVinculo = { chave: txt(d.pedido.chave), cliente: D.limparTexto(d.pedido.cliente, 60), descricao: D.limparTexto(d.pedido.descricao, 120) };
     if (d.vinculo && typeof d.vinculo.id === 'string' && d.vinculo.id) vinculo = { id: txt(d.vinculo.id), nome: D.limparTexto(d.vinculo.nome, D.NOME_PECA_MAX) };
     if (d.multicor === true && Array.isArray(d.cores) && d.cores.length) {
       multicorAtivo = true;
@@ -1825,10 +1960,15 @@
   }
 
   /* ---------- Início ---------- */
+  (function migrarVendas() {   // 0.6.0: quem já estava aprovado ganha a data fixa da venda (aprovadoEm = data da última mudança)
+    var l = lerLista();
+    for (var i = 0; i < l.length; i++) if (D.ehVenda(l[i].status) && !l[i].aprovadoEm) { gravarLista(D.migrarAprovadoEm(l)); return; }
+  })();
   retomarCampos();            // devolve o que estava na tela antes de "Atualizar" (uma única vez)
   validarVinculo();           // a peça do catálogo ainda existe? (o nome mostrado vem do catálogo)
   montarSeletor();
   if (multicorAtivo) aplicarModoMulticor();
+  desenharVinculoPedido();
   rota();
   atualizar();
   avisarSeAtualizou();

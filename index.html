@@ -404,6 +404,29 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
 .env-caixa strong{font-size:15px;font-weight:800}
 .env-caixa span{font-size:12.5px;font-weight:500;color:var(--suave-escuro)}
 .env-caixa .btn.principal{height:48px;font-size:16px}
+.btn-ped{height:44px;padding:0 16px;border:0;border-radius:12px;background:var(--verde);color:#fff;font-size:14px;font-weight:800;flex-shrink:0}
+#tela-hist header{gap:12px}
+.chips.sit{overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 -20px;padding:0 20px}
+.chips.sit::-webkit-scrollbar{display:none}
+.chips.sit .chip{flex:none;padding:0 12px}
+.pill.pedido{background:#E3EEFB;color:#1F4E8C}
+.pill.producao,.pill.embalagem{background:#ECE8F7;color:#4F3A8C}
+.pill.pronto{background:#3D8203;color:#fff}
+.pill.entregue{background:#fff;color:#4A524A;box-shadow:inset 0 0 0 1.5px var(--borda)}
+.pill.cancelado{background:#F7E4DB;color:#8F2F08}
+.seg.seg4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.seg.seg4 button{font-size:12px}
+.caixa.area{height:auto;padding:6px 14px;align-items:stretch}
+.caixa.area textarea{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:16px;font-weight:600;padding:4px 0;resize:none;color:inherit}
+.caixa.area textarea::placeholder{color:#A9B1A5;font-weight:500}
+.nota-pedido{margin:0;padding:10px 12px;border-radius:12px;background:var(--fundo);font-size:13px;font-weight:500;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;max-height:96px;overflow:auto}
+.nota-pedido[hidden],.campo[hidden]{display:none}
+.linha-etapa{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.opcoes-etapa{display:flex;flex-direction:column;gap:8px}
+.opcoes-etapa[hidden]{display:none}
+.selo-pedido{align-items:center}
+.selo-pedido button{width:28px;height:28px;border:0;background:#E3EEFB;color:#1F4E8C;border-radius:50%;font-size:16px;font-weight:800;line-height:1;padding:0;flex-shrink:0}
+.selo-pedido span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1F4E8C;font-weight:700}
 </style>
 </head>
 <body>
@@ -420,28 +443,9 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
     <main>
       <div class="cfg-lista">
         <p class="intro">Toque em Orçar para fazer um orçamento novo.</p>
-        <button class="cfg-item" type="button" data-ir="historico">
-          <span class="cfg-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></span>
-          <span class="cfg-txt"><strong>Orçamentos enviados</strong><span id="res-ini-hist"></span></span>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
-        </button>
         <button class="cfg-item" type="button" data-ir="vendas">
           <span class="cfg-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>
           <span class="cfg-txt"><strong>Painel de vendas</strong><span id="res-ini-vendas"></span></span>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
-        </button>
-      </div>
-    </main>
-  </section>
-
-  <!-- TELA: PEDIDOS (provisória até a etapa 3) -->
-  <section class="tela" id="tela-pedidos" aria-label="Pedidos" hidden>
-    <header><h1>Pedidos</h1></header>
-    <main>
-      <div class="cfg-lista">
-        <button class="cfg-item" type="button" data-ir="historico">
-          <span class="cfg-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></span>
-          <span class="cfg-txt"><strong>Orçamentos enviados</strong><span id="res-ped-hist"></span></span>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
         </button>
       </div>
@@ -468,7 +472,10 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
       <button class="icone" type="button" id="calc-voltar" aria-label="Voltar">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
       </button>
-      <h1 id="calc-titulo">Novo orçamento</h1>
+      <div class="titulo-config">
+        <h1 id="calc-titulo">Novo orçamento</h1>
+        <div class="versao-cab selo-pedido" id="calc-sub" hidden><span id="calc-sub-txt"></span><button type="button" id="pedido-desvincular" aria-label="Desvincular o pedido">×</button></div>
+      </div>
     </header>
 
     <main>
@@ -763,19 +770,13 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
   </section>
 
   <!-- TELA: HISTÓRICO DE ORÇAMENTOS -->
-  <section class="tela" id="tela-hist" aria-label="Orçamentos enviados" hidden>
+  <section class="tela" id="tela-hist" aria-label="Pedidos" hidden>
     <header>
-      <button class="icone" type="button" id="hist-voltar" aria-label="Voltar">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-      </button>
-      <h1>Orçamentos</h1>
+      <h1>Pedidos</h1>
+      <button class="btn-ped" type="button" id="ped-novo">+ Pedido</button>
     </header>
     <main>
       <div class="bloco" id="hist-controles" style="gap:10px">
-        <div class="aba" role="group" aria-label="Tela">
-          <button type="button" aria-pressed="true">Lista</button>
-          <button type="button" data-aba="vendas" aria-pressed="false">Vendas</button>
-        </div>
         <label class="caixa busca"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4A524A" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="hist-busca" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar cliente, peça ou nº" aria-label="Buscar"></label>
         <div class="chips" id="hist-per" role="group" aria-label="Período">
           <button class="chip" type="button" data-per="hoje" aria-pressed="false">Hoje</button>
@@ -784,12 +785,18 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
           <button class="chip" type="button" data-per="mes" aria-pressed="false">Mês</button>
           <button class="chip" type="button" data-per="tudo" aria-pressed="false">Tudo</button>
         </div>
-        <!-- Situação: toque para filtrar, toque de novo para voltar a mostrar todas. Enviado e Vencido = quem aguarda resposta (sem período). -->
-        <div class="chips sit" id="hist-sit" role="group" aria-label="Situação">
-          <button class="chip" type="button" data-sit="enviado" aria-pressed="false">Enviado</button>
+        <!-- Etapa: toque para filtrar, toque de novo para mostrar todos. Pedido, Orçado, Vencido, Produção, Embalagem e Pronto são filas (sem período). -->
+        <div class="chips sit" id="hist-sit" role="group" aria-label="Etapa">
+          <button class="chip" type="button" data-sit="pedido" aria-pressed="false">Pedido</button>
+          <button class="chip" type="button" data-sit="enviado" aria-pressed="false">Orçado</button>
           <button class="chip" type="button" data-sit="vencido" aria-pressed="false">Vencido</button>
           <button class="chip" type="button" data-sit="aprovado" aria-pressed="false">Aprovado</button>
+          <button class="chip" type="button" data-sit="producao" aria-pressed="false">Produção</button>
+          <button class="chip" type="button" data-sit="embalagem" aria-pressed="false">Embalagem</button>
+          <button class="chip" type="button" data-sit="pronto" aria-pressed="false">Pronto</button>
+          <button class="chip" type="button" data-sit="entregue" aria-pressed="false">Entregue</button>
           <button class="chip" type="button" data-sit="recusado" aria-pressed="false">Recusado</button>
+          <button class="chip" type="button" data-sit="cancelado" aria-pressed="false">Cancelado</button>
         </div>
         <p class="resumo-sit" id="hist-sit-resumo" aria-live="polite" hidden></p>
         <section class="resumo" id="hist-resumo" aria-live="polite" aria-label="Resumo do período">
@@ -816,10 +823,6 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
       <h1>Orçamentos</h1>
     </header>
     <main>
-      <div class="aba" role="group" aria-label="Tela">
-        <button type="button" data-aba="lista" aria-pressed="false">Lista</button>
-        <button type="button" aria-pressed="true">Vendas</button>
-      </div>
       <div class="chips" role="group" aria-label="Período">
         <button class="chip" type="button" data-perv="hoje" aria-pressed="false">Hoje</button>
         <button class="chip" type="button" data-perv="7" aria-pressed="false">7 dias</button>
@@ -988,7 +991,7 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
   <div class="folha-fundo" id="det-fundo"></div>
   <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="det-titulo" style="gap:10px">
     <div class="folha-topo">
-      <strong id="det-titulo"><i>Orçamento</i> <span id="det-numero"></span></strong>
+      <strong id="det-titulo"><i id="det-tit-rot">Orçamento</i> <span id="det-numero"></span></strong>
       <button class="fechar" type="button" id="det-fechar" aria-label="Fechar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
@@ -998,21 +1001,32 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
       <label class="campo"><span>Cliente</span><span class="caixa texto"><input id="det-cliente" type="text" maxlength="60" autocomplete="off" placeholder="Sem cliente"></span></label>
       <label class="campo"><span>Peça</span><span class="caixa texto"><input id="det-peca" type="text" maxlength="120" autocomplete="off" placeholder="Sem descrição"></span></label>
     </div>
-    <div class="linha"><div class="rot"><strong id="det-qtd"></strong><span id="det-mat"></span></div><span class="val" id="det-total" style="font-size:18px;font-weight:800"></span></div>
-    <div class="interno"><span class="tag">Só você vê</span>
+    <div class="linha" id="det-linha-total"><div class="rot"><strong id="det-qtd"></strong><span id="det-mat"></span></div><span class="val" id="det-total" style="font-size:18px;font-weight:800"></span></div>
+    <div class="interno" id="det-interno"><span class="tag">Só você vê</span>
       <div class="linha"><div class="rot"><strong>Custo total</strong></div><span class="val" id="det-custo"></span></div>
       <div class="linha"><div class="rot"><strong>Lucro</strong></div><span class="val" id="det-lucro" style="font-weight:800"></span></div>
     </div>
-    <div class="campo"><span>Situação</span>
+    <p class="nota-pedido" id="det-texto" hidden></p>
+    <div class="campo" id="det-bloco-seg"><span>Situação</span>
       <div class="seg" id="det-seg" role="group" aria-label="Situação">
-        <button type="button" data-st="enviado" aria-pressed="false">Enviado</button>
+        <button type="button" data-st="enviado" aria-pressed="false">Orçado</button>
         <button type="button" data-st="aprovado" aria-pressed="false">Aprovado</button>
         <button type="button" data-st="recusado" aria-pressed="false">Recusado</button>
       </div>
       <span class="ajuda neutra" id="det-st-info"></span>
     </div>
+    <div class="campo" id="det-bloco-etapa" hidden><span>Etapa</span>
+      <div class="linha-etapa"><span class="pill" id="det-etapa-pill"></span><span class="ajuda neutra" id="det-etapa-info"></span></div>
+      <button class="btn principal" type="button" id="det-avancar"></button>
+      <button class="btn mais peq" type="button" id="det-mais-op" aria-expanded="false">Mais opções</button>
+      <div class="opcoes-etapa" id="det-opcoes" hidden></div>
+    </div>
+    <div class="campo" id="det-bloco-pedido" hidden>
+      <button class="btn principal" type="button" id="det-orcar">Orçar este pedido</button>
+      <button class="btn mais peq perigo" type="button" id="det-ped-cancelar">Cancelar pedido</button>
+    </div>
     <p class="nota-antigo" id="det-antigo" hidden>Orçamento anterior à versão 0.4.0: sem os dados da mesa.</p>
-    <div class="grade2">
+    <div class="grade2" id="det-acoes-orc">
       <button class="btn" type="button" id="det-reenviar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/></svg>Reenviar</button>
       <button class="btn" type="button" id="det-usar">Usar de novo</button>
     </div>
@@ -1020,6 +1034,41 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
       <button class="btn mais peq" type="button" id="det-catalogo">Salvar no catálogo</button>
       <button class="btn mais peq perigo" type="button" id="det-excluir">Excluir</button>
     </div>
+  </div>
+</div>
+
+<!-- PAINEL: ANOTAR PEDIDO -->
+<div class="folha" id="folha-pedido" hidden>
+  <div class="folha-fundo" id="ped-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="ped-titulo" style="gap:10px">
+    <div class="folha-topo"><strong id="ped-titulo">Anotar pedido</strong>
+      <button class="fechar" type="button" id="ped-fechar" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <label class="campo"><span>Cliente</span><span class="caixa texto"><input id="ped-cliente" type="text" maxlength="60" autocomplete="off" placeholder="Nome do cliente"></span></label>
+    <label class="campo"><span>O que foi pedido</span><span class="caixa area"><textarea id="ped-texto" rows="3" maxlength="600" placeholder="Cole a mensagem do cliente ou escreva o pedido"></textarea></span></label>
+    <div class="grade2">
+      <label class="campo"><span>Quantidade</span><span class="caixa"><input id="ped-qtd" type="text" inputmode="numeric" autocomplete="off" value="1"></span></label>
+      <label class="campo"><span>Prazo desejado</span><span class="caixa texto"><input id="ped-prazo" type="date"></span></label>
+    </div>
+    <div class="campo"><span>Canal</span>
+      <div class="seg seg4" id="ped-canal" role="group" aria-label="Canal">
+        <button type="button" data-canal="whatsapp" aria-pressed="false">WhatsApp</button>
+        <button type="button" data-canal="instagram" aria-pressed="false">Instagram</button>
+        <button type="button" data-canal="presencial" aria-pressed="false">Presencial</button>
+        <button type="button" data-canal="outro" aria-pressed="false">Outro</button>
+      </div>
+    </div>
+    <button class="btn principal" type="button" id="ped-salvar">Salvar pedido</button>
+  </div>
+</div>
+
+<!-- PAINEL: CANCELAR PEDIDO -->
+<div class="folha" id="folha-cancelar" hidden>
+  <div class="folha-fundo" id="cancelar-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="cancelar-titulo">
+    <div class="folha-topo"><strong id="cancelar-titulo">Cancelar este pedido?</strong></div>
+    <p class="ajuda" id="cancelar-txt"></p>
+    <button class="btn principal" type="button" id="cancelar-sim" style="background:#A3360A">Cancelar pedido</button>
+    <button class="btn" type="button" id="cancelar-nao">Voltar</button>
   </div>
 </div>
 
