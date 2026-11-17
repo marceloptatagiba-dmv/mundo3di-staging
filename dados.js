@@ -2,14 +2,28 @@
 (function (root) {
   'use strict';
 
-  var MAX_REGISTROS = 2000;
-  var SITUACOES = ['enviado', 'aprovado', 'recusado'];
-  var SITUACOES_FILTRO = ['enviado', 'vencido', 'aprovado', 'recusado'];   // chips de situação no histórico (vencido é calculado)
+  var MAX_REGISTROS = 5000;              // v6: sobe de 2.000 para 5.000; o app não descarta sozinho (ver estadoLimite)
+  var LIMITE_AVISO_REGISTROS = 4500;     // a partir daqui avisa que o limite está perto
+  /* Etapas gravadas em "status". 'enviado' é o "Orçado" da tela (o valor salvo não muda). Vencido não é gravado: é calculado. */
+  var SITUACOES = ['pedido', 'enviado', 'aprovado', 'producao', 'embalagem', 'pronto', 'entregue', 'recusado', 'cancelado'];
+  var SITUACOES_FILTRO = ['pedido', 'enviado', 'vencido', 'aprovado', 'producao', 'embalagem', 'pronto', 'entregue', 'recusado', 'cancelado'];   // chips da lista (vencido é calculado)
+  var ETAPAS_VENDA = ['aprovado', 'producao', 'embalagem', 'pronto', 'entregue'];   // contam como venda (pela data fixa aprovadoEm)
+  var ETAPAS_ABERTAS = ['pedido', 'enviado', 'aprovado', 'producao', 'embalagem', 'pronto'];   // ainda não encerradas
+  var ESPERA_FILTRO = ['pedido', 'enviado', 'vencido', 'producao', 'embalagem', 'pronto'];   // filas de trabalho: ignoram o período
+  var CANAIS = ['whatsapp', 'instagram', 'presencial', 'outro'];
+  var CONDICOES = ['entrega', 'entrada', 'pago'];
+  var FORMAS_PAGAMENTO = ['pix', 'dinheiro', 'cartao', 'transferencia', 'outro'];
+  var ROTULOS_PAGAMENTO = { pendente: 'Pendente', parcial: 'Parcial', pago: 'Pago' };
+  var ENTRADA_PCT = 50;                  // entrada sugerida (% do total)
+  var MAX_HISTORICO = 30;
+  var MAX_TEXTO_PEDIDO = 600;
+  var MAX_RECEBIMENTOS = 50;
+  var DIAS_SEM_COBRAR = 3;               // depois de cobrar, a tarefa some por 3 dias
   var MAX_CORES = 8;
   var ATALHOS_MARGEM = [70, 80, 90, 100];
   var LIMITE_LEMBRETE_BACKUP = 20;       // orçamentos desde o último backup (a faixa de lembrete aparece só no Histórico)
   var BACKUP_APP = 'mundo3di';
-  var BACKUP_FORMATO = 1;                // número do formato do arquivo: só muda quando o arquivo deixar de ser compatível
+  var BACKUP_FORMATO = 2;                // número do formato do arquivo: só muda quando o arquivo deixar de ser compatível (2 desde a 0.6.0: etapas e pagamentos; o 1 ainda é lido)
   var MAX_CATALOGO = 100;
   var NOME_PECA_MAX = 120; // nome da peça no catálogo; igual ao da descrição do orçamento (o nome vira a descrição quando ela fica vazia)
   var MAX_ARQUIVO_BACKUP = 20 * 1024 * 1024;   // bytes: acima disso o arquivo não é lido
@@ -119,6 +133,7 @@
     if (validoISO(o.validadeAte)) reg.validadeAte = o.validadeAte;
     if (o.catalogoId) reg.catalogoId = limparTexto(o.catalogoId, 40);
     if (o.versaoApp) reg.versaoApp = limparTexto(o.versaoApp, 24);
+    reg.historico = [{ etapa: 'enviado', em: reg.ts }];
     return reg;
   }
 
@@ -150,7 +165,37 @@
     if (dataValida(x.statusEm)) r.statusEm = x.statusEm;
     if (x.catalogoId) r.catalogoId = limparTexto(x.catalogoId, 40);
     if (x.versaoApp) r.versaoApp = limparTexto(x.versaoApp, 24);
+    // v6: etapas, pedido, pagamento e cobrança (todos opcionais; registro antigo continua válido)
+    if (dataValida(x.criadoEm)) r.criadoEm = x.criadoEm;
+    if (CANAIS.indexOf(x.canal) !== -1) r.canal = x.canal;
+    if (validoISO(x.prazoDesejado)) r.prazoDesejado = x.prazoDesejado;
+    if (x.pedidoTexto) r.pedidoTexto = limparTexto(x.pedidoTexto, MAX_TEXTO_PEDIDO);
+    if (dataValida(x.aprovadoEm)) r.aprovadoEm = x.aprovadoEm;
+    if (Array.isArray(x.historico)) {
+      var h = x.historico.filter(function (i) { return i && SITUACOES.indexOf(i.etapa) !== -1 && dataValida(i.em); })
+        .map(function (i) { return { etapa: i.etapa, em: i.em }; }).slice(-MAX_HISTORICO);
+      if (h.length) r.historico = h;
+    }
+    var pg = lerPagamento(x.pagamento);
+    if (pg) r.pagamento = pg;
+    if (dataValida(x.cobradoEm)) r.cobradoEm = x.cobradoEm;
+    if (x.cobrancas) r.cobrancas = Math.floor(n0(x.cobrancas));
     return r;
+  }
+  /* Pagamento salvo: { condicao, entradaPrevista (R$), recebimentos: [{ valor (R$; estorno negativo), em, forma }] }. Inválido -> null. */
+  function lerPagamento(x) {
+    if (!objeto(x)) return null;
+    var pg = { condicao: CONDICOES.indexOf(x.condicao) !== -1 ? x.condicao : 'entrega', recebimentos: [] };
+    var ent = Number(x.entradaPrevista);
+    if (isFinite(ent) && ent > 0) pg.entradaPrevista = c2(ent);
+    if (Array.isArray(x.recebimentos)) {
+      x.recebimentos.slice(0, MAX_RECEBIMENTOS).forEach(function (i) {
+        var v = i && Number(i.valor);
+        if (!isFinite(v) || centavos(v) === 0 || !dataValida(i.em)) return;
+        pg.recebimentos.push({ valor: c2(v), em: i.em, forma: FORMAS_PAGAMENTO.indexOf(i.forma) !== -1 || i.forma === 'estorno' ? i.forma : 'outro' });
+      });
+    }
+    return pg;
   }
   function lerRegistros(bruto) {
     if (!Array.isArray(bruto)) return [];
@@ -175,8 +220,7 @@
       if (m.validadeAte !== undefined && validoISO(m.validadeAte)) x.validadeAte = m.validadeAte;
       if (m.reenvios !== undefined) x.reenvios = Math.floor(n0(m.reenvios));
       if (m.status !== undefined && SITUACOES.indexOf(m.status) !== -1) {
-        x.status = m.status;
-        x.statusEm = dataValida(m.statusEm) ? m.statusEm : new Date().toISOString();
+        x = aplicarEtapa(x, m.status, dataValida(m.statusEm) ? m.statusEm : new Date().toISOString());   // grava historico e aprovadoEm (v6)
       }
       return x;
     });
@@ -194,7 +238,11 @@
     if (st === 'enviado' && validoISO(reg.validadeAte) && dataISO(hoje || new Date()) > reg.validadeAte) return 'vencido';
     return st;
   }
-  var ROTULOS_SITUACAO = { enviado: 'Enviado', aprovado: 'Aprovado', recusado: 'Recusado', vencido: 'Vencido' };
+  /* Nomes das etapas na tela da v6 ("Orçado" no lugar de "Enviado"). */
+  var ROTULOS_ETAPA = { pedido: 'Pedido', enviado: 'Orçado', vencido: 'Vencido', aprovado: 'Aprovado', producao: 'Produção', embalagem: 'Embalagem',
+    pronto: 'Pronto', entregue: 'Entregue', recusado: 'Recusado', cancelado: 'Cancelado' };
+  /* Nomes usados pela tela até a etapa 3 do lote v6 (que passa a usar ROTULOS_ETAPA): só "Enviado" difere. */
+  var ROTULOS_SITUACAO = Object.assign({}, ROTULOS_ETAPA, { enviado: 'Enviado' });
 
   /* ---------- busca, período, resumo e agrupamento ---------- */
 
@@ -217,20 +265,26 @@
 
   /*
    * Filtra por período, situação e busca (cliente, peça ou nº). Do mais novo para o mais antigo.
-   * f: { periodo (padrão '30'), situacao ('enviado' | 'vencido' | 'aprovado' | 'recusado'; vazio = todas), busca, hoje (Date) }
+   * f: { periodo (padrão '30'), situacao (uma de SITUACOES_FILTRO; vazio = todas), pagamento ('pendente' | 'parcial' | 'pago'), busca, hoje (Date),
+   *      venceEm ('AAAA-MM-DD': orçamentos que vencem nesse dia), prazoVencido (true: prazo desejado passado e ainda não entregue) }
    * Com situação:
-   *  - enviado e vencido (aguardando resposta) ignoram o período e saem do mais antigo para o mais novo: é a fila de quem cobrar;
-   *  - aprovado e recusado usam a data da resposta (a mesma regra do painel de vendas), mas a lista continua mostrando a hora do envio.
+   *  - pedido, enviado, vencido, produção, embalagem e pronto (as filas de trabalho) ignoram o período e saem do mais antigo para o mais novo;
+   *  - o filtro de pagamento sozinho também é fila (quem ainda deve), sem período;
+   *  - aprovado, entregue, recusado e cancelado usam a data da venda/resposta (a mesma regra do painel de vendas), mas a lista continua mostrando a hora do envio.
    */
   function filtrarRegistros(regs, f) {
     f = f || {};
     var sit = SITUACOES_FILTRO.indexOf(f.situacao) !== -1 ? f.situacao : '';
-    var espera = sit === 'enviado' || sit === 'vencido';
+    var pag = ROTULOS_PAGAMENTO[f.pagamento] ? f.pagamento : '';
+    var espera = ESPERA_FILTRO.indexOf(sit) !== -1 || (!sit && !!pag);
     var inicio = espera ? null : inicioDoPeriodo(f.periodo === undefined ? '30' : f.periodo, f.hoje);
     var fim = sit && !espera ? somarDias(inicioDoDia(f.hoje || new Date()), 1) : null;
     var q = normalizarBusca(f.busca);
     var saida = (Array.isArray(regs) ? regs : []).filter(function (r) {
       if (sit && situacao(r, f.hoje) !== sit) return false;
+      if (f.venceEm && r.validadeAte !== f.venceEm) return false;
+      if (f.prazoVencido && !(ETAPAS_ABERTAS.indexOf(r.status) !== -1 && validoISO(r.prazoDesejado) && r.prazoDesejado < dataISO(f.hoje || new Date()))) return false;
+      if (pag && situacaoPagamento(r).estado !== pag) return false;
       var quando = sit && !espera ? dataDaVenda(r) : new Date(r.ts);
       if (!dentro(quando, inicio, fim)) return false;
       if (!q) return true;
@@ -267,7 +321,7 @@
     lista.forEach(function (r) {
       var c = Math.round(n0(r.total) * 100);
       total += c;
-      if (r.status === 'aprovado') { apr += c; qApr++; }
+      if (ehVenda(r.status)) { apr += c; qApr++; }
     });
     return { qtd: lista.length, total: total / 100, aprovados: qApr, totalAprovados: apr / 100 };
   }
@@ -292,8 +346,8 @@
 
   /* ---------- painel de vendas (v5) ---------- */
 
-  /* Data em que a venda aconteceu: a da aprovação (statusEm). Aprovado sem statusEm usa a data do envio. */
-  function dataDaVenda(reg) { return dataValida(reg.statusEm) ? new Date(reg.statusEm) : new Date(reg.ts); }
+  /* Data em que a venda aconteceu: a da aprovação (aprovadoEm, fixa: avançar de etapa não muda). Sem ela usa statusEm (registro da 0.5) e, sem ele, a do envio. */
+  function dataDaVenda(reg) { return dataValida(reg.aprovadoEm) ? new Date(reg.aprovadoEm) : dataValida(reg.statusEm) ? new Date(reg.statusEm) : new Date(reg.ts); }
   function dentro(d, ini, fim) { var t = d.getTime(); return (!ini || t >= ini.getTime()) && (!fim || t < fim.getTime()); }
   function centavos(n) { return Math.round((typeof n === 'number' && isFinite(n) ? n : 0) * 100); }
   function diasDesde(ts, hoje) { return Math.round((inicioDoDia(hoje || new Date()).getTime() - inicioDoDia(new Date(ts)).getTime()) / 86400000); }
@@ -318,7 +372,7 @@
     var ini = inicioDoPeriodo(f.periodo === undefined ? '30' : f.periodo, f.hoje), q = normalizarBusca(f.busca);
     var cent = 0, qtd = 0;
     (Array.isArray(regs) ? regs : []).forEach(function (r) {
-      if (r.status !== 'aprovado' || !dentro(dataDaVenda(r), ini, fim)) return;
+      if (!ehVenda(r.status) || !dentro(dataDaVenda(r), ini, fim)) return;
       if (q && normalizarBusca([r.cliente, r.descricao, numero4(r.n), r.n].join(' ')).indexOf(q) === -1) return;
       cent += centavos(r.total); qtd++;
     });
@@ -372,7 +426,7 @@
     var lista = Array.isArray(regs) ? regs : [];
     var per = ['hoje', '7', '30', 'mes', 'tudo'].indexOf(periodo) !== -1 ? periodo : '30';
     var h0 = inicioDoDia(hoje || new Date()), fim = somarDias(h0, 1), ini = inicioDoPeriodo(per, h0);
-    var vendas = lista.filter(function (r) { return r.status === 'aprovado' && dentro(dataDaVenda(r), ini, fim); });
+    var vendas = lista.filter(function (r) { return ehVenda(r.status) && dentro(dataDaVenda(r), ini, fim); });
     vendas.sort(function (a, b) { return dataDaVenda(b).getTime() - dataDaVenda(a).getTime(); });
     var cent = 0, lucro = 0;
     vendas.forEach(function (r) { cent += centavos(r.total); lucro += centavos(r.lucro); });
@@ -381,7 +435,7 @@
     var ant = periodoAnterior(per, h0), anterior = null, variacao = null;
     if (ant) {
       var ac = 0, aq = 0;
-      lista.forEach(function (r) { if (r.status === 'aprovado' && dentro(dataDaVenda(r), ant.inicio, ant.fim)) { ac += centavos(r.total); aq++; } });
+      lista.forEach(function (r) { if (ehVenda(r.status) && dentro(dataDaVenda(r), ant.inicio, ant.fim)) { ac += centavos(r.total); aq++; } });
       anterior = { vendas: ac / 100, qtd: aq };
       if (ac > 0) variacao = Math.round((cent - ac) / ac * 1000) / 10;
     }
@@ -493,7 +547,7 @@
       config: objeto(d.config) ? d.config : {},
       logo: typeof d.logo === 'string' && /^data:image\//.test(d.logo) ? d.logo : '',
       contador: inteiroOk(d.contador),
-      registros: lerRegistros(d.registros),
+      registros: migrarAprovadoEm(lerRegistros(d.registros)),   // v6: backup do formato 1 ganha aprovadoEm
       catalogo: Array.isArray(d.catalogo) ? d.catalogo.filter(objeto).slice(0, MAX_CATALOGO) : [],
       materialAtual: limparTexto(d.materialAtual, 40)
     };
@@ -538,12 +592,12 @@
 
   /* O que mostrar no painel "Restaurar backup" */
   function resumoBackup(b) {
-    var d = b.dados, regs = d.registros, nums = regs.map(function (r) { return r.n; });
+    var d = b.dados, regs = d.registros, nums = regs.filter(function (r) { return r.n > 0; }).map(function (r) { return r.n; });
     var cfg = d.config || {};
     return {
       ambiente: b.ambiente, versaoApp: b.versaoApp, criadoEm: b.criadoEm,
       filamentos: Array.isArray(cfg.materiais) ? cfg.materiais.length : 0,
-      temLogo: !!d.logo, pecas: d.catalogo.length, orcamentos: regs.length,
+      temLogo: !!d.logo, pecas: d.catalogo.length, orcamentos: nums.length, pedidos: regs.length - nums.length,
       numMin: nums.length ? Math.min.apply(null, nums) : 0, numMax: nums.length ? Math.max.apply(null, nums) : 0,
       contador: d.contador
     };
@@ -551,9 +605,10 @@
   function plural(n, um, varios) { return n + ' ' + (n === 1 ? um : varios); }
   /* "128 orçamentos (Nº 0001 a 0128)" · "1 orçamento (Nº 0007)" · "Nenhum orçamento" */
   function descreverOrcamentos(r) {
-    if (!r.orcamentos) return 'Nenhum orçamento';
+    var ped = r.pedidos ? ' e ' + plural(r.pedidos, 'pedido ainda sem orçamento', 'pedidos ainda sem orçamento') : '';
+    if (!r.orcamentos) return r.pedidos ? plural(r.pedidos, 'pedido ainda sem orçamento', 'pedidos ainda sem orçamento') : 'Nenhum orçamento';
     var faixa = r.numMin === r.numMax ? 'Nº ' + numero4(r.numMin) : 'Nº ' + numero4(r.numMin) + ' a ' + numero4(r.numMax);
-    return plural(r.orcamentos, 'orçamento', 'orçamentos') + ' (' + faixa + ')';
+    return plural(r.orcamentos, 'orçamento', 'orçamentos') + ' (' + faixa + ')' + ped;
   }
 
   /*
@@ -564,9 +619,9 @@
     var vistos = {}, todos = [];
     [lerRegistros(principal), lerRegistros(outros)].forEach(function (lista) {
       lista.forEach(function (r) {
-        var k = chaveRegistro(r);
-        if (vistos[k]) return;
-        vistos[k] = true; todos.push(r);
+        var k = chaveRegistro(r), kc = r.criadoEm ? 'c|' + r.criadoEm : '';   // o pedido orçado muda de chave: criadoEm o identifica
+        if (vistos[k] || (kc && vistos[kc])) return;
+        vistos[k] = true; if (kc) vistos[kc] = true; todos.push(r);
       });
     });
     todos.sort(function (a, b) {
@@ -631,7 +686,9 @@
     return /[;"\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
   }
   function decimalBR(n) { return c2(Number(n) || 0).toFixed(2).replace('.', ','); }
-  var COLUNAS_CSV = ['Nº', 'Data', 'Hora', 'Formato', 'Cliente', 'Peça', 'Material', 'Quantidade', 'Valor por peça', 'Total', 'Custo total', 'Lucro', 'Situação', 'Reenvios'];
+  var COLUNAS_CSV = ['Nº', 'Data', 'Hora', 'Formato', 'Cliente', 'Peça', 'Material', 'Quantidade', 'Valor por peça', 'Total', 'Custo total', 'Lucro', 'Situação', 'Reenvios',
+    'Etapa', 'Data da aprovação', 'Data da etapa atual', 'Condição', 'Recebido', 'Falta'];
+  var ROTULOS_CONDICAO = { entrega: 'Tudo na entrega', entrada: 'Entrada + restante', pago: 'Já pago' };
   /*
    * Histórico inteiro para Excel/Planilhas: separador ";", vírgula decimal, UTF-8 com BOM, linhas em ordem de data (a mais antiga primeiro).
    * Uso interno: tem custo e lucro.
@@ -645,11 +702,14 @@
     lista.forEach(function (r) {
       var d = new Date(r.ts);
       var texto = { 4: true, 5: true, 6: true };     // cliente, peça e material: textos digitados pela pessoa
+      var pg = situacaoPagamento(r), temPg = !!pg.estado || somaRecebida(r) !== 0;
       linhas.push([
-        numero4(r.n), dataBR(d), hora(r.ts), r.formato === 'imagem' ? 'Imagem' : 'Texto',
+        r.n > 0 ? numero4(r.n) : 'Pedido', dataBR(d), hora(r.ts), r.formato === 'imagem' ? 'Imagem' : 'Texto',
         r.cliente, r.descricao, materialDoRegistro(r), r.qtd,
         decimalBR(r.valorPeca), decimalBR(r.total), decimalBR(r.custoTotal), decimalBR(r.lucro),
-        ROTULOS_SITUACAO[situacao(r, hoje)], r.reenvios || 0
+        ROTULOS_ETAPA[situacao(r, hoje)], r.reenvios || 0,
+        ROTULOS_ETAPA[r.status] || '', ehVenda(r.status) ? dataBR(dataDaVenda(r)) : '', dataValida(r.statusEm) ? dataBR(new Date(r.statusEm)) : '',
+        temPg && r.pagamento ? ROTULOS_CONDICAO[r.pagamento.condicao] || '' : '', temPg ? decimalBR(pg.recebido) : '', pg.estado ? decimalBR(pg.falta) : ''
       ].map(function (v, i) { return celulaCSV(v, !!texto[i]); }).join(';'));
     });
     return '﻿' + linhas.join('\r\n') + '\r\n';
@@ -795,7 +855,403 @@
     return partes.join(' · ');
   }
 
+  /* ====================================================================================================
+   * v6 (0.6.0) · pedidos com etapas, pagamentos e tarefas do dia (partes 1 e 2 do lote)
+   * Tudo aqui é função pura: recebe listas e devolve listas novas (nada de tela nem de localStorage).
+   * ==================================================================================================== */
+
+  /* Dinheiro para texto: "R$ 1.234,56" (espaço comum, não o da calculadora). */
+  function moedaBR(n) {
+    var c = Math.round(Math.abs(Number(n) || 0) * 100), inteiro = Math.floor(c / 100);
+    return (n < 0 ? '-' : '') + 'R$ ' + String(inteiro).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + dois(c % 100);
+  }
+  function paraISO(q) {
+    if (q instanceof Date && !isNaN(q.getTime())) return q.toISOString();
+    return dataValida(q) ? new Date(q).toISOString() : new Date().toISOString();
+  }
+  function ehVenda(status) { return ETAPAS_VENDA.indexOf(status) !== -1; }
+  function etapasDeVenda() { return ETAPAS_VENDA.slice(); }
+  function nomeDe(r) { return limparTexto(r && r.cliente, 60); }
+  function rotuloNumero(r) { return r.n > 0 ? 'Nº ' + numero4(r.n) : 'Pedido'; }
+  function diasTexto(d) { return d <= 0 ? 'hoje' : d === 1 ? 'há 1 dia' : 'há ' + d + ' dias'; }
+
+  /* ---------- etapas ---------- */
+
+  /* Próxima etapa do botão "Avançar" (depois de Aprovado). Pedido e Orçado não avançam por aqui (orçar e aprovar têm fluxo próprio). */
+  function proximaEtapa(status) {
+    var i = ETAPAS_VENDA.indexOf(status);
+    return i !== -1 && i < ETAPAS_VENDA.length - 1 ? ETAPAS_VENDA[i + 1] : null;
+  }
+  /* Etapas à frente (para "pular"): de Aprovado em diante. */
+  function etapasSeguintes(status) {
+    var i = ETAPAS_VENDA.indexOf(status);
+    return i === -1 ? [] : ETAPAS_VENDA.slice(i + 1);
+  }
+  /* Etapa para "voltar uma etapa": Aprovado volta a Orçado; Recusado e Cancelado voltam à última etapa de antes. */
+  function etapaAnterior(reg) {
+    var st = reg && reg.status, i = ETAPAS_VENDA.indexOf(st);
+    if (i > 0) return ETAPAS_VENDA[i - 1];
+    if (st === 'aprovado') return 'enviado';
+    if (st === 'recusado' || st === 'cancelado') {
+      var h = reg.historico || [];
+      for (var k = h.length - 1; k >= 0; k--) if (h[k].etapa !== 'recusado' && h[k].etapa !== 'cancelado') return h[k].etapa;
+      return st === 'cancelado' ? 'aprovado' : 'enviado';
+    }
+    return null;
+  }
+
+  /*
+   * Troca a etapa de UM registro (cópia). Regras:
+   *  - registra em historico { etapa, em } e atualiza status e statusEm;
+   *  - aprovadoEm (data fixa da venda): gravado ao ENTRAR nas etapas de venda vindo de fora delas; as etapas seguintes não mexem;
+   *    ao sair das etapas de venda (voltar a Orçado, Recusado, Cancelado) é apagado e a venda deixa de contar;
+   *  - Pedido só vai para Recusado ou Cancelado (para orçar, use orcarPedido).
+   */
+  function aplicarEtapa(reg, etapa, em) {
+    if (SITUACOES.indexOf(etapa) === -1 || etapa === 'pedido' || reg.status === etapa) return reg;
+    if (reg.status === 'pedido' && etapa !== 'recusado' && etapa !== 'cancelado') return reg;
+    var x = {}, k, quando = paraISO(em);
+    for (k in reg) if (Object.prototype.hasOwnProperty.call(reg, k)) x[k] = reg[k];
+    var estavaVenda = ehVenda(reg.status);
+    x.status = etapa; x.statusEm = quando;
+    x.historico = (Array.isArray(reg.historico) ? reg.historico.slice() : []).concat([{ etapa: etapa, em: quando }]).slice(-MAX_HISTORICO);
+    if (ehVenda(etapa) && !estavaVenda) x.aprovadoEm = quando;
+    else if (!ehVenda(etapa)) delete x.aprovadoEm;
+    return x;
+  }
+  function mudarEtapa(lista, chave, etapa, em) {
+    return (Array.isArray(lista) ? lista : []).map(function (r) { return chaveRegistro(r) === chave ? aplicarEtapa(r, etapa, em) : r; });
+  }
+  function mudarRegistro(lista, chave, fn) {
+    return (Array.isArray(lista) ? lista : []).map(function (r) { return chaveRegistro(r) === chave ? fn(r) : r; });
+  }
+
+  /* Migração ao abrir a 0.6.0: quem já estava numa etapa de venda e não tem aprovadoEm recebe a data da última mudança (statusEm) ou, sem ela, a do envio. */
+  function migrarAprovadoEm(lista) {
+    return (Array.isArray(lista) ? lista : []).map(function (r) {
+      if (!ehVenda(r.status) || dataValida(r.aprovadoEm)) return r;
+      var x = {}, k;
+      for (k in r) if (Object.prototype.hasOwnProperty.call(r, k)) x[k] = r[k];
+      x.aprovadoEm = dataValida(r.statusEm) ? r.statusEm : r.ts;
+      return x;
+    });
+  }
+
+  /* Quantos registros em cada etapa (Vencido calculado) e em cada situação de pagamento: para os números dos chips. */
+  function contarEtapas(regs, hoje) {
+    var c = { pedido: 0, enviado: 0, vencido: 0, aprovado: 0, producao: 0, embalagem: 0, pronto: 0, entregue: 0, recusado: 0, cancelado: 0,
+      pagamento: { pendente: 0, parcial: 0, pago: 0 } };
+    (Array.isArray(regs) ? regs : []).forEach(function (r) {
+      c[situacao(r, hoje)]++;
+      var p = situacaoPagamento(r).estado;
+      if (p) c.pagamento[p]++;
+    });
+    return c;
+  }
+
+  /* ---------- pedido (ainda sem orçamento) ---------- */
+
+  /*
+   * Anotar pedido: registro sem Nº (n = 0), sem preço. o: { cliente, texto (o que foi pedido; aceita colar a mensagem), qtd, prazoDesejado ('AAAA-MM-DD'),
+   * canal ('whatsapp' | 'instagram' | 'presencial' | 'outro'), quando (Date) }.
+   * descricao guarda o começo do texto (120); pedidoTexto guarda o texto inteiro (até 600).
+   */
+  function novoPedido(o, quando) {
+    o = o || {};
+    var ts = (quando instanceof Date ? quando : o.quando instanceof Date ? o.quando : new Date()).toISOString();
+    var texto = limparTexto(o.texto, MAX_TEXTO_PEDIDO);
+    var reg = {
+      n: 0, ts: ts, criadoEm: ts, formato: 'texto', qtd: Math.max(1, Math.floor(n0(o.qtd)) || 1),
+      valorPeca: 0, total: 0, custoTotal: 0, lucro: 0, material: '',
+      cliente: limparTexto(o.cliente, 60), descricao: texto.slice(0, 120), status: 'pedido', reenvios: 0,
+      historico: [{ etapa: 'pedido', em: ts }]
+    };
+    if (texto.length > 120) reg.pedidoTexto = texto;
+    if (CANAIS.indexOf(o.canal) !== -1) reg.canal = o.canal;
+    if (validoISO(o.prazoDesejado)) reg.prazoDesejado = o.prazoDesejado;
+    return lerRegistro(reg);   // já no formato salvo (mesma ordem dos campos)
+  }
+
+  /*
+   * "Orçar este pedido": ao enviar, o MESMO registro passa a Orçado (ganha Nº, data de envio, valores e entrada).
+   * r e o: os mesmos de novoRegistro. Devolve { lista, chave, vinculado }. Pedido não encontrado (ou já orçado): cria registro novo, como antes.
+   * Atenção: a chave do registro muda (nº e data do envio); quem chama guarda a chave nova.
+   */
+  function orcarPedido(lista, chavePedido, r, o) {
+    var base = Array.isArray(lista) ? lista : [];
+    var novo = novoRegistro(r, o), achou = false;
+    var nova = base.map(function (p) {
+      if (chaveRegistro(p) !== chavePedido || p.status !== 'pedido') return p;
+      achou = true;
+      var x = {}, k;
+      for (k in novo) if (Object.prototype.hasOwnProperty.call(novo, k)) x[k] = novo[k];
+      ['criadoEm', 'canal', 'prazoDesejado', 'pedidoTexto'].forEach(function (c) { if (p[c] !== undefined) x[c] = p[c]; });
+      if (!x.cliente) x.cliente = p.cliente;
+      if (!x.descricao) x.descricao = p.descricao;
+      x.historico = (Array.isArray(p.historico) ? p.historico : [{ etapa: 'pedido', em: p.ts }]).concat([{ etapa: 'enviado', em: x.ts }]).slice(-MAX_HISTORICO);
+      return x;
+    });
+    if (!achou) return { lista: adicionarRegistro(base, novo), chave: chaveRegistro(novo), vinculado: false };
+    var orcado = nova.filter(function (p) { return p.n === novo.n && p.ts === novo.ts; })[0];
+    return { lista: nova, chave: chaveRegistro(orcado), vinculado: true };
+  }
+
+  /* ---------- pagamentos ---------- */
+
+  function somaRecebida(reg) {   // centavos; estorno entra negativo
+    var rec = reg && reg.pagamento && reg.pagamento.recebimentos, s = 0;
+    if (Array.isArray(rec)) rec.forEach(function (x) { s += centavos(x.valor); });
+    return s;
+  }
+  /*
+   * Situação do pagamento, calculada pela soma dos recebimentos (nunca fica inconsistente).
+   * Só existe a partir de Aprovado e enquanto não Cancelado; fora disso estado = null.
+   * { estado: 'pendente' | 'parcial' | 'pago' | null, rotulo, recebido, falta, total, texto }
+   */
+  function situacaoPagamento(reg) {
+    var total = centavos(reg && reg.total), rec = somaRecebida(reg);
+    if (!reg || !ehVenda(reg.status)) return { estado: null, rotulo: '', recebido: rec / 100, falta: 0, total: total / 100, texto: '' };
+    var falta = Math.max(0, total - rec);
+    var estado = rec <= 0 ? (total === 0 ? 'pago' : 'pendente') : falta > 0 ? 'parcial' : 'pago';
+    var cond = reg.pagamento && reg.pagamento.condicao;
+    var texto = estado === 'pago' ? 'Pago' : estado === 'pendente' ? 'Falta ' + moedaBR(falta / 100)
+      : (cond === 'entrada' ? 'Entrada ' : 'Recebido ') + moedaBR(rec / 100) + ' · falta ' + moedaBR(falta / 100);
+    return { estado: estado, rotulo: ROTULOS_PAGAMENTO[estado], recebido: rec / 100, falta: falta / 100, total: total / 100, texto: texto };
+  }
+
+  /* Entrada sugerida: 50% do total (em centavos inteiros). */
+  function entradaSugerida(total) { return Math.round(centavos(total) * ENTRADA_PCT / 100) / 100; }
+
+  /*
+   * Condição de pagamento de um pedido aprovado. c: { condicao: 'entrega' | 'entrada' | 'pago', entradaPct (padrão 50) ou entradaValor (R$) }.
+   * 'entrada' grava entradaPrevista (entre 0,01 e o total); 'pago' registra na hora um recebimento do que falta, na data da aprovação (ou em).
+   */
+  function definirCondicao(lista, chave, c, em) {
+    c = c || {};
+    var cond = CONDICOES.indexOf(c.condicao) !== -1 ? c.condicao : 'entrega';
+    return mudarRegistro(lista, chave, function (r) {
+      var x = {}, k;
+      for (k in r) if (Object.prototype.hasOwnProperty.call(r, k)) x[k] = r[k];
+      var pg = { condicao: cond, recebimentos: (r.pagamento && r.pagamento.recebimentos ? r.pagamento.recebimentos : []).slice() };
+      if (r.pagamento && r.pagamento.entradaPrevista !== undefined && cond === 'entrada') pg.entradaPrevista = r.pagamento.entradaPrevista;
+      var total = centavos(r.total);
+      if (cond === 'entrada') {
+        var ent = c.entradaValor !== undefined ? centavos(c.entradaValor) : Math.round(total * (c.entradaPct > 0 ? c.entradaPct : ENTRADA_PCT) / 100);
+        pg.entradaPrevista = Math.min(Math.max(ent, total > 0 ? 1 : 0), total) / 100;
+      }
+      if (cond === 'pago') {
+        var falta = total - somaRecebida({ pagamento: pg });
+        if (falta > 0) pg.recebimentos.push({ valor: falta / 100, em: paraISO(em || r.aprovadoEm || r.statusEm), forma: 'outro' });
+      }
+      x.pagamento = pg;
+      return x;
+    });
+  }
+  /* Aprovar já com a condição de pagamento (o painel "Aprovado" faz as duas coisas de uma vez). */
+  function aprovarComCondicao(lista, chave, c, em) {
+    return definirCondicao(mudarEtapa(lista, chave, 'aprovado', em), chave, c, em);
+  }
+
+  /* Registra um recebimento { valor (R$, maior que 0), em, forma }. Só em pedidos de venda (Aprovado a Entregue). */
+  function registrarRecebimento(lista, chave, rec) {
+    rec = rec || {};
+    var cent = centavos(rec.valor);
+    if (cent <= 0) return lista;
+    return mudarRegistro(lista, chave, function (r) {
+      if (!ehVenda(r.status)) return r;
+      var x = {}, k;
+      for (k in r) if (Object.prototype.hasOwnProperty.call(r, k)) x[k] = r[k];
+      var pg = r.pagamento || { condicao: 'entrega', recebimentos: [] };
+      var lst = (pg.recebimentos || []).concat([{ valor: cent / 100, em: paraISO(rec.em), forma: FORMAS_PAGAMENTO.indexOf(rec.forma) !== -1 ? rec.forma : 'outro' }]);
+      x.pagamento = Object.assign({}, pg, { recebimentos: lst.slice(-MAX_RECEBIMENTOS) });
+      return x;
+    });
+  }
+  function excluirRecebimento(lista, chave, indice) {
+    return mudarRegistro(lista, chave, function (r) {
+      var rec = r.pagamento && r.pagamento.recebimentos;
+      if (!Array.isArray(rec) || !rec[indice]) return r;
+      var x = Object.assign({}, r);
+      x.pagamento = Object.assign({}, r.pagamento, { recebimentos: rec.filter(function (_, i) { return i !== indice; }) });
+      return x;
+    });
+  }
+  /*
+   * Cancelar um pedido aprovado. Com dinheiro recebido o app pergunta "Ficou com você · Devolvi":
+   * devolveu = true grava um estorno (recebimento negativo do total recebido); false mantém o valor. O registro fica.
+   */
+  function cancelarPedido(lista, chave, devolveu, em) {
+    var quando = paraISO(em);
+    return mudarRegistro(lista, chave, function (r) {
+      var x = aplicarEtapa(r, 'cancelado', quando), rec = somaRecebida(r);
+      if (devolveu && rec > 0) {
+        var pg = r.pagamento || { condicao: 'entrega', recebimentos: [] };
+        x.pagamento = Object.assign({}, pg, { recebimentos: (pg.recebimentos || []).concat([{ valor: -rec / 100, em: quando, forma: 'estorno' }]) });
+      }
+      return x;
+    });
+  }
+
+  /* O que falta receber dos pedidos de venda (Cancelado fica de fora). { qtd (pedidos com saldo), total } */
+  function aReceber(regs) {
+    var cent = 0, qtd = 0;
+    (Array.isArray(regs) ? regs : []).forEach(function (r) {
+      var p = situacaoPagamento(r), f = Math.round(p.falta * 100);
+      if (p.estado && f > 0) { cent += f; qtd++; }
+    });
+    return { qtd: qtd, total: cent / 100 };
+  }
+  /* Recebido no período, pela data de cada recebimento, já descontados os estornos. periodo: 'hoje' | '7' | '30' | 'mes' | 'tudo'. */
+  function recebidoNoPeriodo(regs, periodo, hoje) {
+    var h0 = inicioDoDia(hoje || new Date()), fim = somarDias(h0, 1), ini = inicioDoPeriodo(periodo, h0), cent = 0, qtd = 0;
+    (Array.isArray(regs) ? regs : []).forEach(function (r) {
+      var rec = r.pagamento && r.pagamento.recebimentos;
+      if (!Array.isArray(rec)) return;
+      rec.forEach(function (x) {
+        if (!dataValida(x.em) || !dentro(new Date(x.em), ini, fim)) return;
+        cent += centavos(x.valor); if (x.valor > 0) qtd++;
+      });
+    });
+    return { total: cent / 100, qtd: qtd };
+  }
+
+  /* ---------- limite de registros ---------- */
+  /* { qtd, max, perto (a partir de 4.500), cheio (5.000), texto }. O app não descarta sozinho: com cheio = true pede para excluir antes de gravar. */
+  function estadoLimite(qtdOuLista) {
+    var qtd = Array.isArray(qtdOuLista) ? qtdOuLista.length : Math.max(0, Math.floor(Number(qtdOuLista) || 0));
+    return { qtd: qtd, max: MAX_REGISTROS, perto: qtd >= LIMITE_AVISO_REGISTROS, cheio: qtd >= MAX_REGISTROS,
+      texto: qtd >= MAX_REGISTROS ? 'Limite de registros atingido: exclua pedidos antigos antes de anotar outro'
+        : qtd >= LIMITE_AVISO_REGISTROS ? 'Perto do limite de registros: faça um backup e exclua pedidos antigos que não precisa' : '' };
+  }
+
+  /* ---------- cobrar resposta ---------- */
+  /* Mensagem pronta (editável) para o WhatsApp. Nunca leva custo, margem nem lucro. */
+  function mensagemCobranca(reg) {
+    var cli = nomeDe(reg), desc = limparTexto(reg && reg.descricao, 120), total = moedaBR(reg && reg.total);
+    return (cli ? 'Oi, ' + cli + '!' : 'Oi!') + ' Tudo bem? Passando para saber se você viu o orçamento Nº ' + numero4(reg && reg.n) +
+      ' (' + (desc ? desc + ', ' : '') + total + '). Se quiser, ajusto a quantidade ou o prazo.';
+  }
+  /* Ao compartilhar a cobrança: grava cobradoEm e soma 1 em cobrancas. */
+  function registrarCobranca(lista, chave, quando) {
+    return mudarRegistro(lista, chave, function (r) {
+      return Object.assign({}, r, { cobradoEm: paraISO(quando), cobrancas: Math.floor(n0(r.cobrancas)) + 1 });
+    });
+  }
+
+  /* ---------- Início: pra fazer hoje e primeiro uso ---------- */
+
+  /* Nomes para "Bia e Loja Exemplo" / "Bia, Ana e outros 2" (até 2 nomes). */
+  function listaNomes(regs) {
+    var nomes = [], vistos = {};
+    regs.forEach(function (r) { var n = nomeDe(r), k = normalizarBusca(n); if (n && !vistos[k]) { vistos[k] = 1; nomes.push(n); } });
+    if (nomes.length <= 2) return nomes.join(' e ');
+    return nomes[0] + ', ' + nomes[1] + ' e outros ' + (nomes.length - 2);
+  }
+  /*
+   * Lista ordenada de tarefas do dia (todas; a tela mostra as 6 primeiras e "Ver todas").
+   * backup: { em: ISO } do último backup, ou null. Cada tarefa: { tipo, texto, valor (R$ ou null), acao, alvo, chave (quando é de um registro) }.
+   * alvo: { tela: 'pedidos' | 'config-backup' | 'cobrar' | 'recebimento', filtro: { situacao, pagamento, venceEm } }.
+   */
+  function tarefasHoje(registros, agora, backup) {
+    var hoje = agora instanceof Date ? agora : new Date(), h0 = inicioDoDia(hoje), hojeISO = dataISO(hoje);
+    var lista = Array.isArray(registros) ? registros : [], saida = [];
+    function soma(rs) { var c = 0; rs.forEach(function (r) { c += centavos(r.total); }); return c / 100; }
+    function porData(campo) { return function (a, b) { return new Date(a[campo] || a.ts).getTime() - new Date(b[campo] || b.ts).getTime() || a.n - b.n; }; }
+    function tarefa(tipo, texto, valor, acao, alvo, chave) {
+      var t = { tipo: tipo, texto: texto, valor: valor === undefined ? null : valor, acao: acao, alvo: alvo };
+      if (chave) t.chave = chave;
+      saida.push(t);
+    }
+
+    // 1. orçamentos que vencem hoje
+    var vencemHoje = lista.filter(function (r) { return r.status === 'enviado' && r.validadeAte === hojeISO; });
+    if (vencemHoje.length) tarefa('vencem-hoje', vencemHoje.length === 1 ? '1 orçamento vence hoje' : vencemHoje.length + ' orçamentos vencem hoje',
+      soma(vencemHoje), 'Ver', { tela: 'pedidos', filtro: { situacao: 'enviado', venceEm: hojeISO } });
+
+    // 2. pedidos para orçar
+    var pedidos = lista.filter(function (r) { return r.status === 'pedido'; }).sort(porData('criadoEm'));
+    if (pedidos.length) {
+      var dp = diasDesde(pedidos[0].criadoEm || pedidos[0].ts, h0);
+      tarefa('pedidos', pedidos.length === 1 ? '1 pedido para orçar · ' + (dp <= 0 ? 'chegou hoje' : diasTexto(dp)) : pedidos.length + ' pedidos para orçar · o mais antigo ' + (dp <= 0 ? 'é de hoje' : diasTexto(dp)),
+        null, 'Ver', { tela: 'pedidos', filtro: { situacao: 'pedido' } });
+    }
+
+    // 3. cobrar resposta (um por orçamento; some por 3 dias depois de cobrar)
+    lista.filter(function (r) {
+      if (situacao(r, hoje) !== 'enviado' || diasDesde(r.ts, h0) < DIAS_ANTIGO) return false;
+      return !(dataValida(r.cobradoEm) && diasDesde(r.cobradoEm, h0) < DIAS_SEM_COBRAR);
+    }).sort(porData('ts')).forEach(function (r) {
+      var d = diasDesde(r.ts, h0), cli = nomeDe(r), num = 'Nº ' + numero4(r.n);
+      tarefa('cobrar', cli ? cli + ': sem resposta há ' + d + ' dias · ' + num : num + ': sem resposta há ' + d + ' dias', r.total, 'Cobrar', { tela: 'cobrar' }, chaveRegistro(r));
+    });
+
+    // 4. receber entrada (condição com entrada e nada recebido)
+    var semEntrada = lista.filter(function (r) {
+      return ehVenda(r.status) && r.pagamento && r.pagamento.condicao === 'entrada' && n0(r.pagamento.entradaPrevista) > 0 && somaRecebida(r) <= 0;
+    }).sort(porData('aprovadoEm'));
+    semEntrada.forEach(function (r) {
+      var cli = nomeDe(r);
+      tarefa('receber-entrada', 'Receber entrada ' + (cli ? 'do ' + cli : '· ' + rotuloNumero(r)), r.pagamento.entradaPrevista, 'Recebi', { tela: 'recebimento' }, chaveRegistro(r));
+    });
+
+    // 5. prontos para entregar
+    var prontos = lista.filter(function (r) { return r.status === 'pronto'; }).sort(porData('statusEm'));
+    if (prontos.length) {
+      var nm = listaNomes(prontos);
+      tarefa('prontos', (prontos.length === 1 ? '1 pronto para entregar' : prontos.length + ' prontos para entregar') + (nm ? ' · ' + nm : ''),
+        null, 'Ver', { tela: 'pedidos', filtro: { situacao: 'pronto' } });
+    }
+
+    // 6. receber restante (Pronto ou Entregue com saldo; quem já está em "receber entrada" não repete)
+    lista.filter(function (r) {
+      return (r.status === 'pronto' || r.status === 'entregue') && situacaoPagamento(r).falta > 0 && semEntrada.indexOf(r) === -1;
+    }).sort(porData('statusEm')).forEach(function (r) {
+      var cli = nomeDe(r), p = situacaoPagamento(r);
+      tarefa('receber-restante', (p.recebido > 0 ? 'Receber restante ' : 'Receber ') + (cli ? 'de ' + cli : '· ' + rotuloNumero(r)), p.falta, 'Recebi', { tela: 'recebimento' }, chaveRegistro(r));
+    });
+
+    // 7. prazo vencido (prazo desejado passou e ainda não foi entregue)
+    var atrasados = lista.filter(function (r) { return ETAPAS_ABERTAS.indexOf(r.status) !== -1 && validoISO(r.prazoDesejado) && r.prazoDesejado < hojeISO; });
+    if (atrasados.length) tarefa('prazo-vencido', atrasados.length === 1 ? '1 pedido com prazo vencido' : atrasados.length + ' pedidos com prazo vencido',
+      null, 'Ver', { tela: 'pedidos', filtro: { prazoVencido: true } });
+
+    // 8. orçamentos vencidos
+    var vencidos = lista.filter(function (r) { return situacao(r, hoje) === 'vencido'; });
+    if (vencidos.length) tarefa('vencidos', vencidos.length === 1 ? '1 orçamento vencido' : vencidos.length + ' orçamentos vencidos', soma(vencidos), 'Ver',
+      { tela: 'pedidos', filtro: { situacao: 'vencido' } });
+
+    // 9. backup
+    var lemb = precisaLembreteBackup(lista, backup);
+    if (lemb.mostrar) tarefa('backup', 'Fazer backup · ' + textoLembreteBackup(lemb.qtd, backup).replace(/\.$/, ''), null, 'Fazer', { tela: 'config-backup' });
+
+    // 10. perto do limite de registros
+    var lim = estadoLimite(lista.length);
+    if (lim.perto) tarefa('limite', lim.texto, null, 'Ver', { tela: 'config-backup' });
+
+    return saida;
+  }
+
+  /* Primeiro uso: sem nenhum registro (orçamento ou pedido). config = o que está salvo no aparelho (ou null se nunca salvou). */
+  function primeiroUso(registros, config) {
+    var cfg = objeto(config) ? config : null;
+    return {
+      primeiroUso: !Array.isArray(registros) || registros.length === 0,
+      itens: [
+        { chave: 'filamento', texto: 'Preço do seu filamento', feito: !!cfg && Object.keys(cfg).length > 0, alvo: 'config-filamentos' },
+        { chave: 'negocio', texto: 'Meu negócio', feito: !!(cfg && objeto(cfg.negocio) && limparTexto(cfg.negocio.nome, 60)), alvo: 'config-negocio' }
+      ]
+    };
+  }
+
   var Dados = {
+    LIMITE_AVISO_REGISTROS: LIMITE_AVISO_REGISTROS, ROTULOS_ETAPA: ROTULOS_ETAPA, ROTULOS_PAGAMENTO: ROTULOS_PAGAMENTO, ROTULOS_CONDICAO: ROTULOS_CONDICAO,
+    CANAIS: CANAIS, CONDICOES: CONDICOES, FORMAS_PAGAMENTO: FORMAS_PAGAMENTO, ETAPAS_ABERTAS: ETAPAS_ABERTAS, ENTRADA_PCT: ENTRADA_PCT,
+    moedaBR: moedaBR, ehVenda: ehVenda, etapasDeVenda: etapasDeVenda, proximaEtapa: proximaEtapa, etapasSeguintes: etapasSeguintes, etapaAnterior: etapaAnterior,
+    mudarEtapa: mudarEtapa, migrarAprovadoEm: migrarAprovadoEm, contarEtapas: contarEtapas, novoPedido: novoPedido, orcarPedido: orcarPedido,
+    situacaoPagamento: situacaoPagamento, entradaSugerida: entradaSugerida, definirCondicao: definirCondicao, aprovarComCondicao: aprovarComCondicao,
+    registrarRecebimento: registrarRecebimento, excluirRecebimento: excluirRecebimento, cancelarPedido: cancelarPedido, aReceber: aReceber,
+    recebidoNoPeriodo: recebidoNoPeriodo, estadoLimite: estadoLimite, mensagemCobranca: mensagemCobranca, registrarCobranca: registrarCobranca,
+    tarefasHoje: tarefasHoje, primeiroUso: primeiroUso, lerPagamento: lerPagamento,
     MAX_REGISTROS: MAX_REGISTROS, SITUACOES: SITUACOES, ROTULOS_SITUACAO: ROTULOS_SITUACAO, LIMITE_LEMBRETE_BACKUP: LIMITE_LEMBRETE_BACKUP,
     limparTexto: limparTexto, dataISO: dataISO, somarDias: somarDias, textoCampo: textoCampo, textoTempo: textoTempo,
     montarEntrada: montarEntrada, entradaParaCampos: entradaParaCampos,

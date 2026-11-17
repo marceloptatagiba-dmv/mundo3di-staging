@@ -387,7 +387,7 @@
     igual('registro antigo: sem entrada, situação enviado, 0 reenvios', ('entrada' in lidos[0]) + '|' + lidos[0].status + '|' + lidos[0].reenvios + '|' + ('versaoApp' in lidos[0]), 'false|enviado|0|false');
     igual('registro antigo: dados preservados', [lidos[0].n, lidos[0].cliente, lidos[0].total, lidos[0].material].join('|'), '3|Ana|8.36|PLA');
     igual('registros: lista que não é lista vira vazia', D.lerRegistros(null).length + '|' + D.lerRegistros('x').length, '0|0');
-    igual('registro: situação desconhecida volta a enviado', D.lerRegistros([Object.assign({}, antigo, { status: 'cancelado' })])[0].status, 'enviado');
+    igual('registro: situação desconhecida volta a enviado', D.lerRegistros([Object.assign({}, antigo, { status: 'lixo' })])[0].status, 'enviado');
     igual('registro: ida e volta (ler o que foi gravado) não muda nada', JSON.stringify(D.lerRegistros([regNovo])[0]), JSON.stringify(regNovo));
 
     // item 1 · período, busca, resumo
@@ -480,7 +480,7 @@
     var regsBk = [mkReg(1, 5, { cliente: 'Ana', entrada: D.montarEntrada(entPlanilha), versaoApp: '0.4.0' }), mkReg(2, 3), mkReg(3, 1, { status: 'aprovado', statusEm: em(1, 9).toISOString() })];
     var aparelho = { config: cfgBackup, logo: LOGO, contador: 3, registros: regsBk, catalogo: [{ id: 'c1', nome: 'Suporte' }], materialAtual: 'petg' };
     var arqBk = D.montarBackup(aparelho, { ambiente: 'producao', versaoApp: '0.4.0', criadoEm: em(0, 18, 40) });
-    igual('backup: cabeçalho do arquivo', [arqBk.app, arqBk.formato, arqBk.ambiente, arqBk.versaoApp, arqBk.criadoEm === em(0, 18, 40).toISOString()].join('|'), 'mundo3di|1|producao|0.4.0|true');
+    igual('backup: cabeçalho do arquivo', [arqBk.app, arqBk.formato, arqBk.ambiente, arqBk.versaoApp, arqBk.criadoEm === em(0, 18, 40).toISOString()].join('|'), 'mundo3di|2|producao|0.4.0|true');
     igual('backup: dados guardados', Object.keys(arqBk.dados).join(','), 'config,logo,contador,registros,catalogo,materialAtual');
     igual('backup: versaoApp do staging aceita o sufixo', D.montarBackup(aparelho, { versaoApp: '0.4.0-teste.3' }).versaoApp, '0.4.0-teste.3');
     igual('backup: nome do arquivo', D.nomeArquivoBackup(hojeH), 'backup-orcamento-3di-2026-11-14.json');
@@ -500,7 +500,7 @@
     igual('backup inválido: lista em vez de arquivo', erroBk('[1,2]'), 'invalido');
     igual('backup inválido: formato que não é número', erroBk('{"app":"mundo3di","formato":"1","dados":{}}'), 'invalido');
     igual('backup inválido: arquivo da planilha', erroBk('Nº;Data;Hora'), 'invalido');
-    igual('backup de formato mais novo pede atualizar o app', erroBk('{"app":"mundo3di","formato":2,"dados":{}}'), 'novo');
+    igual('backup de formato mais novo pede atualizar o app', erroBk('{"app":"mundo3di","formato":3,"dados":{}}'), 'novo');
     igual('backup: mensagens de erro', D.ERROS_BACKUP.invalido + ' / ' + D.ERROS_BACKUP.novo, 'Este arquivo não é um backup do Mundo 3Di. / Backup feito numa versão mais nova. Atualize o app.');
     igual('backup: arquivo grande demais não é lido', erroBk(new Array(D.MAX_ARQUIVO_BACKUP + 2).join('a')), 'grande');
     igual('backup de outro ambiente é aceito', D.lerBackup(JSON.stringify(D.montarBackup(aparelho, { ambiente: 'teste' }))).backup.ambiente, 'teste');
@@ -556,10 +556,10 @@
     ];
     var csv = D.gerarCSV(csvRegs, hojeH), linhasCsv = csv.split('\r\n');
     igual('planilha: começa com BOM e termina com quebra de linha', (csv.charCodeAt(0) === 0xFEFF) + '|' + (linhasCsv[linhasCsv.length - 1] === ''), 'true|true');
-    igual('planilha: colunas', linhasCsv[0].replace('﻿', ''), 'Nº;Data;Hora;Formato;Cliente;Peça;Material;Quantidade;Valor por peça;Total;Custo total;Lucro;Situação;Reenvios');
+    igual('planilha: colunas', linhasCsv[0].replace('﻿', ''), 'Nº;Data;Hora;Formato;Cliente;Peça;Material;Quantidade;Valor por peça;Total;Custo total;Lucro;Situação;Reenvios;Etapa;Data da aprovação;Data da etapa atual;Condição;Recebido;Falta');
     igual('planilha: uma linha por orçamento, do mais antigo para o mais novo', linhasCsv.length + '|' + linhasCsv[1].split(';')[0] + ',' + linhasCsv[2].split(';')[0], '5|0001,0003');
-    igual('planilha: acento, vírgula decimal e situação calculada (vencido)', linhasCsv[1], '0001;05/11/2026;' + D.hora(csvRegs[1].ts) + ';Texto;José;Vaso geométrico;PLA;1;1234,50;1234,50;600,00;634,50;Vencido;0');
-    igual('planilha: fórmula não é interpretada e lucro negativo sai com sinal', linhasCsv[2], '0003;13/11/2026;' + D.hora(csvRegs[2].ts) + ";Texto;'=SOMA(A1);;;1;10,00;10,00;5,00;-2,50;Enviado;0");
+    igual('planilha: acento, vírgula decimal e situação calculada (vencido)', linhasCsv[1], '0001;05/11/2026;' + D.hora(csvRegs[1].ts) + ';Texto;José;Vaso geométrico;PLA;1;1234,50;1234,50;600,00;634,50;Vencido;0;Orçado;;;;;');
+    igual('planilha: fórmula não é interpretada e lucro negativo sai com sinal', linhasCsv[2], '0003;13/11/2026;' + D.hora(csvRegs[2].ts) + ";Texto;'=SOMA(A1);;;1;10,00;10,00;5,00;-2,50;Orçado;0;Orçado;;;;;");
     igual('planilha: ; e aspas entre aspas, aspas dobradas e quebra de linha dentro do campo', csv.indexOf('"Zé; ""Pé"" Ltda";"Chaveiro\nlogo"') > -1, true);
     igual('planilha: imagem recusada com reenvios', csv.indexOf(';Imagem;') > -1 && csv.indexOf(';79,50;40,25;39,25;Recusado;2') > -1, true);
     igual('planilha: sem orçamento só tem o cabeçalho', D.gerarCSV([], hojeH).split('\r\n').filter(Boolean).length, 1);
@@ -723,7 +723,7 @@
     igual('situação aprovado em Hoje: nenhum', idsSit({ situacao: 'aprovado', periodo: 'hoje' }), '');
     igual('situação recusado (7 dias)', idsSit({ situacao: 'recusado', periodo: '7' }), '74,73');
     igual('situação combina com a busca', idsSit({ situacao: 'aprovado', periodo: 'tudo', busca: 'ANA' }), '50,46,42,20');
-    igual('situação desconhecida ou vazia não filtra', idsSit({ situacao: 'cancelado', periodo: 'tudo' }) === idsSit({ periodo: 'tudo' }), true);
+    igual('situação desconhecida ou vazia não filtra', idsSit({ situacao: 'lixo', periodo: 'tudo' }) === idsSit({ periodo: 'tudo' }), true);
     igual('sem situação a ordem continua do mais novo para o mais antigo', idsSit({ periodo: 'hoje' }).split(',')[0], '67');
     var pvCont = D.contarSituacoes(pvTodos, hojeH);
     igual('contagem dos chips: 8 aguardando e 3 vencidos', pvCont.enviado + '|' + pvCont.vencido + '|' + D.contarSituacoes(null, hojeH).enviado, '8|3|0');
@@ -735,6 +735,232 @@
     var pvMuitos = []; for (var pvI = 0; pvI < 2000; pvI++) pvMuitos.push(pvVenda(1000 + pvI, pvI % 60 + 1, pvI % 60, 10 + (pvI % 7), 5, 'Cliente ' + (pvI % 13), 'Peça ' + (pvI % 9)));
     var pvT0 = Date.now(), pvM = D.resumoVendas(pvMuitos, 'tudo', hojeH);
     igual('painel: 2.000 registros em menos de 1 segundo', pvM.qtd + '|' + (Date.now() - pvT0 < 1000), '2000|true');
+
+
+    /* ---- v6 · etapa 1: pedidos com etapas, pagamentos, tarefas do dia e backup formato 2 (dados.js) ---- */
+    var v6 = {};
+    v6.iso = function (dias, h, min) { return em(dias, h, min).toISOString(); };
+    v6.venda = function (n, diasAprov, total, extra) {   // aprovado há diasAprov dias (com aprovadoEm), enviado 3 dias antes
+      return mkReg(n, diasAprov + 3, Object.assign({ status: 'aprovado', statusEm: v6.iso(diasAprov), aprovadoEm: v6.iso(diasAprov), total: total, lucro: total / 2, custoTotal: total / 2 }, extra || {}));
+    };
+    v6.tipos = function (ts) { return ts.map(function (t) { return t.tipo; }).join(','); };
+    v6.ns = function (lista) { return lista.map(function (x) { return x.n; }).join(','); };
+    igual('v6: limites e formato (5.000 registros, aviso em 4.500, backup formato 2)', [D.MAX_REGISTROS, D.LIMITE_AVISO_REGISTROS, D.BACKUP_FORMATO].join('|'), '5000|4500|2');
+    igual('v6: etapas gravadas', D.SITUACOES.join(','), 'pedido,enviado,aprovado,producao,embalagem,pronto,entregue,recusado,cancelado');
+    igual('v6: etapas que contam como venda', D.etapasDeVenda().join(','), 'aprovado,producao,embalagem,pronto,entregue');
+    igual('v6: rótulos das etapas (Orçado é o novo nome de enviado)', ['pedido', 'enviado', 'vencido', 'aprovado', 'producao', 'embalagem', 'pronto', 'entregue', 'recusado', 'cancelado'].map(function (k) { return D.ROTULOS_ETAPA[k]; }).join(','),
+      'Pedido,Orçado,Vencido,Aprovado,Produção,Embalagem,Pronto,Entregue,Recusado,Cancelado');
+    igual('v6: a tela atual segue com "Enviado" até a etapa 3', D.ROTULOS_SITUACAO.enviado + '|' + D.ROTULOS_SITUACAO.producao, 'Enviado|Produção');
+    igual('v6: dinheiro em texto', [D.moedaBR(0), D.moedaBR(2.36), D.moedaBR(1234.5), D.moedaBR(466.2), D.moedaBR(1234567.891)].join('|'), 'R$ 0,00|R$ 2,36|R$ 1.234,50|R$ 466,20|R$ 1.234.567,89');
+
+    // novo registro enviado já nasce com o histórico; registro antigo (sem campos v6) continua igual
+    var v6Novo = D.novoRegistro(r1, { numero: 5, quando: em(0, 9) });
+    igual('v6: registro enviado nasce com historico', JSON.stringify(v6Novo.historico), JSON.stringify([{ etapa: 'enviado', em: v6Novo.ts }]));
+    var v6Antigo = D.lerRegistro(mkReg(7, 4, { status: 'aprovado', statusEm: v6.iso(2) }));
+    igual('v6: registro da 0.5 não ganha campos novos ao ser lido', ['historico', 'aprovadoEm', 'pagamento', 'criadoEm', 'cobradoEm'].filter(function (k) { return k in v6Antigo; }).join(','), '');
+    var v6Completo = D.lerRegistro(Object.assign(mkReg(8, 4, { status: 'producao', statusEm: v6.iso(1) }), { aprovadoEm: v6.iso(3), criadoEm: v6.iso(6), canal: 'whatsapp', prazoDesejado: '2026-11-20',
+      pedidoTexto: 'Preciso de 40 chaveiros', historico: [{ etapa: 'pedido', em: v6.iso(6) }, { etapa: 'aprovado', em: v6.iso(3) }, { etapa: 'lixo', em: v6.iso(2) }],
+      pagamento: { condicao: 'entrada', entradaPrevista: 5, recebimentos: [{ valor: 5, em: v6.iso(3), forma: 'pix' }, { valor: 0, em: v6.iso(3), forma: 'pix' }, { valor: 2, em: 'x', forma: 'pix' }, { valor: 1, em: v6.iso(2), forma: 'banana' }] },
+      cobradoEm: v6.iso(2), cobrancas: 2 }));
+    igual('v6: leitura guarda os campos novos e descarta o que é inválido', [v6Completo.aprovadoEm === v6.iso(3), v6Completo.canal, v6Completo.prazoDesejado, v6Completo.pedidoTexto.length, v6Completo.historico.length,
+      v6Completo.pagamento.condicao, v6Completo.pagamento.entradaPrevista, v6Completo.pagamento.recebimentos.length, v6Completo.pagamento.recebimentos[1].forma, v6Completo.cobrancas].join('|'), 'true|whatsapp|2026-11-20|23|2|entrada|5|2|outro|2');
+    igual('v6: ida e volta de um registro completo não muda nada', JSON.stringify(D.lerRegistro(v6Completo)), JSON.stringify(v6Completo));
+    igual('v6: canal inválido e prazo inválido saem', ['canal' in D.lerRegistro(mkReg(9, 0, { canal: 'pombo' })), 'prazoDesejado' in D.lerRegistro(mkReg(9, 0, { prazoDesejado: 'amanhã' }))].join('|'), 'false|false');
+
+    // migração de aprovadoEm
+    var v6Mig = D.migrarAprovadoEm([mkReg(1, 5, { status: 'aprovado', statusEm: v6.iso(2) }), mkReg(2, 5, { status: 'aprovado' }), mkReg(3, 5), mkReg(4, 5, { status: 'recusado', statusEm: v6.iso(1) }),
+      mkReg(5, 5, { status: 'pronto', statusEm: v6.iso(1) }), mkReg(6, 5, { status: 'aprovado', statusEm: v6.iso(2), aprovadoEm: v6.iso(4) })]);
+    igual('migração: aprovado recebe a data de statusEm; sem statusEm, a do envio; pronto idem', [v6Mig[0].aprovadoEm === v6.iso(2), v6Mig[1].aprovadoEm === mkReg(2, 5).ts, v6Mig[4].aprovadoEm === v6.iso(1)].join('|'), 'true|true|true');
+    igual('migração: enviado e recusado não ganham; quem já tem fica como está', ['aprovadoEm' in v6Mig[2], 'aprovadoEm' in v6Mig[3], v6Mig[5].aprovadoEm === v6.iso(4)].join('|'), 'false|false|true');
+    igual('migração: é idempotente e não mexe na lista de entrada', JSON.stringify(D.migrarAprovadoEm(v6Mig)) + '|' + ('aprovadoEm' in mkReg(1, 5, { status: 'aprovado' })), JSON.stringify(v6Mig) + '|false');
+    igual('migração: os números do painel de hoje não mudam', D.resumoVendas(v6Mig, 'tudo', hojeH).vendas + '|' + D.resumoVendas([mkReg(1, 5, { status: 'aprovado', statusEm: v6.iso(2) }), mkReg(2, 5, { status: 'aprovado' }), mkReg(5, 5, { status: 'pronto', statusEm: v6.iso(1) }), mkReg(6, 5, { status: 'aprovado', statusEm: v6.iso(2) })], 'tudo', hojeH).vendas, '40|40');
+
+    // mudar etapa: data da venda fixa, histórico, pular e voltar
+    var v6L = [D.lerRegistro(mkReg(10, 4, { total: 100, lucro: 40, custoTotal: 60 })), D.lerRegistro(mkReg(11, 4, { total: 50 }))], v6K = D.chaveRegistro(v6L[0]);
+    var v6A = D.mudarEtapa(v6L, v6K, 'aprovado', em(3, 15));
+    igual('etapa: aprovar grava status, statusEm, aprovadoEm e historico; o resto da lista fica', [v6A[0].status, v6A[0].statusEm === v6.iso(3, 15), v6A[0].aprovadoEm === v6.iso(3, 15), v6A[0].historico.map(function (h) { return h.etapa; }).join('>'), v6A[1] === v6L[1], v6L[0].status].join('|'), 'aprovado|true|true|aprovado|true|enviado');
+    var v6P = D.mudarEtapa(D.mudarEtapa(D.mudarEtapa(v6A, v6K, 'producao', em(2)), v6K, 'embalagem', em(1)), v6K, 'pronto', em(0, 9));
+    igual('etapa: avançar não muda a data da venda (aprovadoEm) e o histórico cresce', [v6P[0].status, v6P[0].aprovadoEm === v6.iso(3, 15), v6P[0].statusEm === v6.iso(0, 9), v6P[0].historico.length].join('|'), 'pronto|true|true|4');
+    igual('etapa: venda continua no dia da aprovação ao avançar (painel)', D.resumoVendas(v6P, 'hoje', hojeH).vendas + '|' + D.resumoVendas(v6P, '7', hojeH).vendas + '|' + D.resumoVendas(v6A, '7', hojeH).vendas, '0|100|100');
+    igual('etapa: todas as etapas de venda contam no painel e no cartão da lista', ['aprovado', 'producao', 'embalagem', 'pronto', 'entregue'].map(function (e) { var l = [v6.venda(1, 1, 80, { status: e })]; return D.resumoVendas(l, '7', hojeH).vendas + '/' + D.aprovadosDoPeriodo(l, { periodo: '7', hoje: hojeH }).aprovados + '/' + D.resumir(l).aprovados; }).join(','), '80/1/1,80/1/1,80/1/1,80/1/1,80/1/1');
+    igual('etapa: pedido, orçado, recusado e cancelado não contam como venda', ['pedido', 'enviado', 'recusado', 'cancelado'].map(function (e) { return D.resumoVendas([v6.venda(1, 1, 80, { status: e })], '7', hojeH).vendas; }).join(','), '0,0,0,0');
+    var v6Pu = D.mudarEtapa(v6A, v6K, 'entregue', em(1));
+    igual('etapa: pular de Aprovado para Entregue', v6Pu[0].status + '|' + v6Pu[0].historico.length + '|' + (v6Pu[0].aprovadoEm === v6.iso(3, 15)), 'entregue|2|true');
+    igual('etapa: voltar uma etapa (Pronto, Embalagem, Produção, Aprovado, Orçado, Pedido)', ['pronto', 'embalagem', 'producao', 'aprovado', 'enviado', 'pedido'].map(function (e) { return D.etapaAnterior({ status: e }); }).join(','), 'embalagem,producao,aprovado,enviado,,');
+    var v6Volta = D.mudarEtapa(v6P, v6K, D.etapaAnterior(v6P[0]), em(0, 10));
+    igual('etapa: voltar de Pronto a Embalagem mantém a data da venda', v6Volta[0].status + '|' + (v6Volta[0].aprovadoEm === v6.iso(3, 15)), 'embalagem|true');
+    var v6Desf = D.mudarEtapa(v6A, v6K, 'enviado', em(2));
+    igual('etapa: voltar a Orçado apaga aprovadoEm e a venda sai; aprovar de novo grava a data nova', [('aprovadoEm' in v6Desf[0]), D.resumoVendas(v6Desf, '7', hojeH).vendas, D.mudarEtapa(v6Desf, v6K, 'aprovado', em(1))[0].aprovadoEm === v6.iso(1)].join('|'), 'false|0|true');
+    var v6Canc = D.mudarEtapa(v6P, v6K, 'cancelado', em(0, 11));
+    igual('etapa: Cancelado sai das vendas, o registro fica e dá para voltar à etapa anterior', [v6Canc.length, D.resumoVendas(v6Canc, 'tudo', hojeH).vendas, 'aprovadoEm' in v6Canc[0], D.etapaAnterior(v6Canc[0])].join('|'), '2|0|false|pronto');
+    igual('etapa: a mesma etapa, etapa inválida e chave inexistente não mudam nada', [D.mudarEtapa(v6A, v6K, 'aprovado', em(0))[0] === v6A[0], D.mudarEtapa(v6A, v6K, 'lixo', em(0))[0] === v6A[0], JSON.stringify(D.mudarEtapa(v6A, 'x|y', 'pronto', em(0))) === JSON.stringify(v6A)].join('|'), 'true|true|true');
+    igual('etapa: próxima etapa e fim da linha', ['aprovado', 'producao', 'embalagem', 'pronto', 'entregue', 'enviado', 'pedido', 'cancelado'].map(function (e) { return D.proximaEtapa(e) || ''; }).join(','), 'producao,embalagem,pronto,entregue,,,,');
+    igual('etapa: etapas para pular', D.etapasSeguintes('producao').join(',') + '|' + D.etapasSeguintes('entregue').length + '|' + D.etapasSeguintes('enviado').length, 'embalagem,pronto,entregue|0|0');
+    igual('etapa: atualizarRegistro (tela atual) também grava aprovadoEm e histórico', (function () {
+      var x = D.atualizarRegistro(v6L, v6K, { status: 'aprovado', statusEm: v6.iso(2) })[0];
+      return [x.aprovadoEm === v6.iso(2), x.historico.length].join('|');
+    })(), 'true|1');
+    igual('etapa: Recusado volta à etapa anterior pelo histórico', D.etapaAnterior(D.mudarEtapa(v6L, v6K, 'recusado', em(0))[0]), 'enviado');
+
+    // pedido ainda sem orçamento
+    var v6Ped = D.novoPedido({ cliente: '  Carlos  Lima ', texto: 'Preciso de 40 chaveiros com a logo da loja, para sexta', qtd: 40, prazoDesejado: '2026-11-20', canal: 'whatsapp' }, em(2, 9));
+    igual('pedido: n = 0, sem preço, etapa Pedido, criado e histórico', [v6Ped.n, v6Ped.status, v6Ped.total, v6Ped.cliente, v6Ped.qtd, v6Ped.criadoEm === v6.iso(2, 9), v6Ped.ts === v6Ped.criadoEm, v6Ped.historico[0].etapa, v6Ped.canal, v6Ped.prazoDesejado].join('|'),
+      '0|pedido|0|Carlos Lima|40|true|true|pedido|whatsapp|2026-11-20');
+    var v6Longo = new Array(300).join('a');
+    igual('pedido: texto curto fica na descrição; texto longo guarda o inteiro e a descrição corta em 120', [D.novoPedido({ texto: 'Chaveiro' }).descricao, 'pedidoTexto' in D.novoPedido({ texto: 'Chaveiro' }), D.novoPedido({ texto: v6Longo }).descricao.length, D.novoPedido({ texto: v6Longo }).pedidoTexto.length].join('|'), 'Chaveiro|false|120|299');
+    igual('pedido: texto vai só até 600; canal e prazo inválidos saem; quantidade mínima 1', [D.novoPedido({ texto: new Array(900).join('b') }).pedidoTexto.length, 'canal' in D.novoPedido({ texto: 'x', canal: 'fax' }), 'prazoDesejado' in D.novoPedido({ texto: 'x', prazoDesejado: 'logo' }), D.novoPedido({ texto: 'x', qtd: 0 }).qtd].join('|'), '600|false|false|1');
+    igual('pedido: sobrevive à leitura e ao backup', JSON.stringify(D.lerRegistro(v6Ped)) === JSON.stringify(v6Ped), true);
+    var v6Fila = [v6Ped, D.lerRegistro(mkReg(20, 1, { total: 100 })), D.lerRegistro(mkReg(21, 3, { total: 200, status: 'aprovado', statusEm: v6.iso(2) }))];
+    igual('pedido: não é enviado, nem aguardando resposta, nem venda, nem vencido', [D.contarSituacoes(v6Fila, hojeH).enviado, D.resumoVendas(v6Fila, 'tudo', hojeH).aguardando.qtd, D.resumoVendas(v6Fila, 'tudo', hojeH).qtd, D.situacao(v6Ped, hojeH)].join('|'), '1|1|1|pedido');
+    var v6Kp = D.chaveRegistro(v6Ped);
+    igual('pedido: etapa Pedido só vai para Recusado ou Cancelado', ['aprovado', 'pronto', 'cancelado'].map(function (e) { return D.mudarEtapa([v6Ped], v6Kp, e, em(0))[0].status; }).join(','), 'pedido,pedido,cancelado');
+    var v6Orc = D.orcarPedido(v6Fila, v6Kp, r1, { numero: 77, quando: em(0, 14), cliente: 'Carlos Lima', descricao: 'Chaveiro com logo', entrada: entPlanilha, prazo: '5 dias úteis', validadeAte: '2026-11-21', versaoApp: '0.6.0-teste.1' });
+    var v6Of = v6Orc.lista[0];
+    igual('orçar pedido: o mesmo registro vira Orçado (não cria outro)', [v6Orc.lista.length, v6Orc.vinculado, v6Of.status, v6Of.n, v6Of.ts === v6.iso(0, 14), v6Of.total, v6Of.cliente, v6Of.descricao, D.chaveRegistro(v6Of) === v6Orc.chave].join('|'), '3|true|enviado|77|true|2.36|Carlos Lima|Chaveiro com logo|true');
+    igual('orçar pedido: guarda criação, canal, prazo desejado e acrescenta ao histórico', [v6Of.criadoEm === v6.iso(2, 9), v6Of.canal, v6Of.prazoDesejado, v6Of.historico.map(function (h) { return h.etapa; }).join('>'), D.contarSituacoes(v6Orc.lista, hojeH).enviado, !!v6Of.entrada].join('|'), 'true|whatsapp|2026-11-20|pedido>enviado|2|true');
+    igual('orçar pedido: sem descrição digitada fica a do pedido; sem pedido vinculado cria registro novo', [D.orcarPedido(v6Fila, v6Kp, r1, { numero: 78, quando: em(0, 15) }).lista[0].descricao, D.orcarPedido(v6Fila, 'x|y', r1, { numero: 79, quando: em(0, 15) }).lista.length, D.orcarPedido(v6Fila, 'x|y', r1, { numero: 79, quando: em(0, 15) }).vinculado, D.orcarPedido(v6Orc.lista, v6Orc.chave, r1, { numero: 80, quando: em(0, 16) }).lista.length].join('|'),
+      'Preciso de 40 chaveiros com a logo da loja, para sexta|4|false|4');
+    igual('orçar pedido: restaurar backup não repete o pedido que já virou orçamento', D.juntarRegistros(v6Orc.lista, [v6Ped], 5000).length + '|' + D.juntarRegistros([v6Ped], v6Orc.lista, 5000).length, '3|3');
+
+    // chips por etapa e filtros
+    var v6Todos = [D.lerRegistro(v6Ped), D.lerRegistro(mkReg(30, 2, { total: 100 })), D.lerRegistro(mkReg(31, 12, { total: 80, validadeAte: '2026-11-05' })), v6.venda(32, 5, 90, { status: 'aprovado' }), v6.venda(33, 20, 90, { status: 'producao' }),
+      v6.venda(34, 40, 70, { status: 'embalagem' }), v6.venda(35, 1, 60, { status: 'pronto' }), v6.venda(36, 3, 60, { status: 'entregue' }), v6.venda(37, 60, 60, { status: 'entregue' }), mkReg(38, 4, { status: 'recusado', statusEm: v6.iso(3) }), v6.venda(39, 2, 50, { status: 'cancelado' })];
+    var v6Cont = D.contarEtapas(v6Todos, hojeH);
+    igual('chips: contagem por etapa (Vencido separado de Orçado)', ['pedido', 'enviado', 'vencido', 'aprovado', 'producao', 'embalagem', 'pronto', 'entregue', 'recusado', 'cancelado'].map(function (e) { return v6Cont[e]; }).join(','), '1,1,1,1,1,1,1,2,1,1');
+    var v6Ids = function (f) { return v6.ns(D.filtrarRegistros(v6Todos, Object.assign({ hoje: hojeH }, f))); };
+    igual('chips: Pedido, Pronto, Produção e Embalagem são filas e ignoram o período', [v6Ids({ situacao: 'pedido', periodo: 'hoje' }), v6Ids({ situacao: 'pronto', periodo: 'hoje' }), v6Ids({ situacao: 'producao', periodo: 'hoje' }), v6Ids({ situacao: 'embalagem', periodo: 'hoje' })].join('|'), '0|35|33|34');
+    igual('chips: Entregue e Cancelado usam a data da venda no período', [v6Ids({ situacao: 'entregue', periodo: '7' }), v6Ids({ situacao: 'entregue', periodo: 'tudo' }), v6Ids({ situacao: 'cancelado', periodo: '7' })].join('|'), '36|36,37|39');
+    igual('chips: filtro por vence em e por prazo vencido', [v6Ids({ situacao: 'vencido', venceEm: '2026-11-05' }), D.filtrarRegistros([mkReg(1, 0, { validadeAte: '2026-11-14' }), mkReg(2, 0, { validadeAte: '2026-11-15' })], { situacao: 'enviado', venceEm: '2026-11-14', hoje: hojeH }).length,
+      v6.ns(D.filtrarRegistros([mkReg(1, 0, { prazoDesejado: '2026-11-10' }), mkReg(2, 0, { prazoDesejado: '2026-11-20' }), mkReg(3, 0, { prazoDesejado: '2026-11-10', status: 'entregue' })], { prazoVencido: true, periodo: 'tudo', hoje: hojeH }))].join('|'), '31|1|1');
+
+    // pagamentos
+    var v6S = function (extra) { return D.lerRegistro(v6.venda(60, 2, 186, extra)); };
+    var v6Ch = D.chaveRegistro(v6S());
+    var v6P0 = D.situacaoPagamento(v6S());
+    igual('pagamento: sem recebimento é Pendente com a falta', [v6P0.estado, v6P0.rotulo, v6P0.falta, v6P0.texto].join('|'), 'pendente|Pendente|186|Falta R$ 186,00');
+    var v6Ent = D.definirCondicao([v6S()], v6Ch, { condicao: 'entrada' });
+    igual('pagamento: entrada sugerida é 50% do total', [v6Ent[0].pagamento.condicao, v6Ent[0].pagamento.entradaPrevista, D.entradaSugerida(186), D.entradaSugerida(0.05), D.entradaSugerida(100.01)].join('|'), 'entrada|93|93|0.03|50.01');
+    igual('pagamento: entrada em % ou em R$, sempre entre 1 centavo e o total', [D.definirCondicao([v6S()], v6Ch, { condicao: 'entrada', entradaPct: 30 })[0].pagamento.entradaPrevista, D.definirCondicao([v6S()], v6Ch, { condicao: 'entrada', entradaValor: 40.5 })[0].pagamento.entradaPrevista,
+      D.definirCondicao([v6S()], v6Ch, { condicao: 'entrada', entradaValor: 999 })[0].pagamento.entradaPrevista, D.definirCondicao([v6S()], v6Ch, { condicao: 'entrada', entradaValor: 0 })[0].pagamento.entradaPrevista].join('|'), '55.8|40.5|186|0.01');
+    igual('pagamento: chave inexistente não muda nada', JSON.stringify(D.definirCondicao([v6S()], 'x', { condicao: 'entrada' })) === JSON.stringify([v6S()]), true);
+    var v6Rec = D.registrarRecebimento(v6Ent, v6Ch, { valor: 93, em: em(1, 10), forma: 'pix' });
+    var v6Pp = D.situacaoPagamento(v6Rec[0]);
+    igual('pagamento: entrada recebida deixa Parcial, com o texto da entrada', [v6Pp.estado, v6Pp.recebido, v6Pp.falta, v6Pp.texto].join('|'), 'parcial|93|93|Entrada R$ 93,00 · falta R$ 93,00');
+    var v6Pg = D.situacaoPagamento(D.registrarRecebimento(v6Rec, v6Ch, { valor: 93, em: em(0, 10), forma: 'dinheiro' })[0]);
+    igual('pagamento: o restante deixa Pago', [v6Pg.estado, v6Pg.rotulo, v6Pg.falta, v6Pg.texto].join('|'), 'pago|Pago|0|Pago');
+    var v6C3 = D.lerRegistro(v6.venda(61, 1, 0.3)), v6K3 = D.chaveRegistro(v6C3);
+    igual('pagamento: soma em centavos inteiros (0,10 + 0,20 = 0,30)', D.situacaoPagamento(D.registrarRecebimento(D.registrarRecebimento([v6C3], v6K3, { valor: 0.1 }), v6K3, { valor: 0.2 })[0]).estado, 'pago');
+    igual('pagamento: valor zero, negativo ou lixo não grava; forma desconhecida vira Outro', [D.registrarRecebimento(v6Ent, v6Ch, { valor: 0 })[0].pagamento.recebimentos.length, D.registrarRecebimento(v6Ent, v6Ch, { valor: -5 })[0].pagamento.recebimentos.length, D.registrarRecebimento(v6Ent, v6Ch, { valor: 'abc' })[0].pagamento.recebimentos.length,
+      D.registrarRecebimento(v6Ent, v6Ch, { valor: 5, forma: 'cheque' })[0].pagamento.recebimentos[0].forma].join('|'), '0|0|0|outro');
+    var v6Orcado = D.lerRegistro(mkReg(62, 0, { total: 10 }));
+    igual('pagamento: Pedido e Orçado não recebem nem têm etiqueta; sem condição escolhida vale "entrega"', [D.registrarRecebimento([v6Orcado], D.chaveRegistro(v6Orcado), { valor: 5 })[0].pagamento === undefined,
+      D.registrarRecebimento([v6S()], v6Ch, { valor: 5 })[0].pagamento.condicao, D.situacaoPagamento(v6Orcado).estado, D.situacaoPagamento(v6Ped).rotulo === ''].join('|'), 'true|entrega||true');
+    igual('pagamento: excluir um recebimento volta a etiqueta; índice inexistente não muda', D.situacaoPagamento(D.excluirRecebimento(v6Rec, v6Ch, 0)[0]).estado + '|' + D.excluirRecebimento(v6Rec, v6Ch, 5)[0].pagamento.recebimentos.length, 'pendente|1');
+    var v6K63 = D.chaveRegistro(D.lerRegistro(mkReg(63, 3, { total: 120 })));
+    var v6Ja = D.aprovarComCondicao([D.lerRegistro(mkReg(63, 3, { total: 120 }))], v6K63, { condicao: 'pago' }, em(1, 9))[0];
+    igual('pagamento: "Já pago" aprova e registra o total, com a data da aprovação', [v6Ja.status, v6Ja.pagamento.condicao, v6Ja.pagamento.recebimentos.length, v6Ja.pagamento.recebimentos[0].valor, v6Ja.pagamento.recebimentos[0].em === v6.iso(1, 9), D.situacaoPagamento(v6Ja).estado].join('|'), 'aprovado|pago|1|120|true|pago');
+    igual('pagamento: mudar para "Já pago" depois só registra o que falta; repetir não duplica', (function () {
+      var a = D.definirCondicao(v6Rec, v6Ch, { condicao: 'pago' }), b = D.definirCondicao(a, v6Ch, { condicao: 'pago' });
+      return [a[0].pagamento.recebimentos.map(function (x) { return x.valor; }).join('+'), b[0].pagamento.recebimentos.length].join('|');
+    })(), '93+93|2');
+    var v6Cn1 = D.cancelarPedido(v6Rec, v6Ch, true, em(0, 12))[0], v6Cn2 = D.cancelarPedido(v6Rec, v6Ch, false, em(0, 12))[0];
+    igual('cancelar com entrada: "Devolvi" grava o estorno; "Ficou com você" mantém', [v6Cn1.status, D.situacaoPagamento(v6Cn1).recebido, v6Cn1.pagamento.recebimentos[1].valor, v6Cn1.pagamento.recebimentos[1].forma, v6Cn2.pagamento.recebimentos.length, D.situacaoPagamento(v6Cn2).recebido, 'aprovadoEm' in v6Cn1].join('|'), 'cancelado|0|-93|estorno|1|93|false');
+    igual('cancelar sem nada recebido não inventa estorno; cancelado não tem etiqueta de pagamento', D.cancelarPedido([v6S()], v6Ch, true, em(0))[0].pagamento === undefined && D.situacaoPagamento(v6Cn2).estado === null, true);
+    var v6Rs = [D.lerRegistro(v6.venda(70, 5, 100)), D.lerRegistro(v6.venda(71, 5, 200, { status: 'pronto' })), D.lerRegistro(v6.venda(72, 5, 50, { status: 'entregue' })), v6Cn2, D.lerRegistro(mkReg(73, 2, { total: 999 })), v6Ped];
+    v6Rs = D.registrarRecebimento(v6Rs, D.chaveRegistro(v6Rs[1]), { valor: 120, em: em(0, 9), forma: 'pix' });
+    v6Rs = D.registrarRecebimento(v6Rs, D.chaveRegistro(v6Rs[2]), { valor: 50, em: em(10, 9), forma: 'pix' });
+    igual('a receber: soma só o que falta nas vendas (cancelado, orçado e pedido ficam fora)', JSON.stringify(D.aReceber(v6Rs)), '{"qtd":2,"total":180}');
+    igual('a receber: lista vazia', JSON.stringify(D.aReceber([])) + JSON.stringify(D.aReceber(null)), '{"qtd":0,"total":0}{"qtd":0,"total":0}');
+    var v6Es = [D.cancelarPedido(v6Rec, v6Ch, true, em(0, 12))[0]].concat(v6Rs.slice(0, 3));
+    igual('recebido no período: pela data de cada recebimento (hoje, 7, 30 dias, tudo)', [D.recebidoNoPeriodo(v6Rs, 'hoje', hojeH).total, D.recebidoNoPeriodo(v6Rs, '7', hojeH).total, D.recebidoNoPeriodo(v6Rs, '30', hojeH).total, D.recebidoNoPeriodo(v6Rs, 'tudo', hojeH).total].join('|'), '120|213|263|263');
+    igual('recebido no período: o estorno desconta na data em que foi feito', [D.recebidoNoPeriodo(v6Es, 'hoje', hojeH).total, D.recebidoNoPeriodo(v6Es, 'tudo', hojeH).total, D.recebidoNoPeriodo(v6Es, 'tudo', hojeH).qtd].join('|'), '27|170|3');
+    igual('filtro por pagamento: Pendente, Parcial e Pago (sem período)', ['pendente', 'parcial', 'pago'].map(function (p) { return v6.ns(D.filtrarRegistros(v6Rs, { pagamento: p, hoje: hojeH })); }).join('|'), '70|71|72');
+    igual('chips de pagamento: contagem', JSON.stringify(D.contarEtapas(v6Rs, hojeH).pagamento), '{"pendente":1,"parcial":1,"pago":1}');
+
+    // limite de registros
+    igual('limite: 4.499 ainda sem aviso, 4.500 perto, 5.000 cheio', [D.estadoLimite(4499), D.estadoLimite(4500), D.estadoLimite(5000)].map(function (e) { return e.perto + '/' + e.cheio; }).join(','), 'false/false,true/false,true/true');
+    igual('limite: textos de aviso', [D.estadoLimite(10).texto === '', D.estadoLimite(4600).texto, D.estadoLimite(5000).texto].join('|'), 'true|Perto do limite de registros: faça um backup e exclua pedidos antigos que não precisa|Limite de registros atingido: exclua pedidos antigos antes de anotar outro');
+    igual('limite: aceita lista no lugar do número', D.estadoLimite(new Array(4500).fill(1)).perto + '|' + D.estadoLimite(null).qtd, 'true|0');
+    var v6Gr = []; for (var v6I = 0; v6I < 5000; v6I++) v6Gr.push(mkReg(v6I + 1, v6I % 40, { status: v6I % 3 ? 'aprovado' : 'enviado', statusEm: v6.iso(v6I % 40), total: 10 + (v6I % 5) }));
+    var v6T0 = Date.now(), v6Rg = D.resumoVendas(D.migrarAprovadoEm(v6Gr), 'tudo', hojeH); D.tarefasHoje(v6Gr, hojeH, null); D.contarEtapas(v6Gr, hojeH);
+    igual('limite: 5.000 registros no painel, nas tarefas e nos chips em menos de 1 segundo', v6Rg.qtd + '|' + (Date.now() - v6T0 < 1000), '3333|true');
+    igual('limite: juntar e restaurar aceitam até 5.000, sem descartar', D.juntarRegistros(v6Gr.slice(0, 3000), v6Gr.slice(2000), D.MAX_REGISTROS).length + '|' + D.restaurarDados({ registros: v6Gr.slice(0, 3000) }, { registros: v6Gr.slice(2000) }).registros.length, '5000|5000');
+
+    // cobrar resposta
+    var v6Cob = D.lerRegistro(mkReg(42, 9, { cliente: 'Ana', descricao: 'Suporte de headset', total: 186, custoTotal: 123.45, lucro: 62.55 }));
+    igual('cobrança: mensagem completa', D.mensagemCobranca(v6Cob), 'Oi, Ana! Tudo bem? Passando para saber se você viu o orçamento Nº 0042 (Suporte de headset, R$ 186,00). Se quiser, ajusto a quantidade ou o prazo.');
+    igual('cobrança: sem cliente e sem descrição', D.mensagemCobranca(Object.assign({}, v6Cob, { cliente: '' })) + '|' + D.mensagemCobranca(Object.assign({}, v6Cob, { descricao: '' })),
+      'Oi! Tudo bem? Passando para saber se você viu o orçamento Nº 0042 (Suporte de headset, R$ 186,00). Se quiser, ajusto a quantidade ou o prazo.|Oi, Ana! Tudo bem? Passando para saber se você viu o orçamento Nº 0042 (R$ 186,00). Se quiser, ajusto a quantidade ou o prazo.');
+    igual('cobrança: nunca mostra custo, margem nem lucro', /123,45|62,55|custo|lucro|margem/i.test(D.mensagemCobranca(v6Cob)), false);
+    var v6Cr = D.registrarCobranca([v6Cob, D.lerRegistro(mkReg(43, 1))], D.chaveRegistro(v6Cob), em(0, 10));
+    var v6Cr2 = D.registrarCobranca(v6Cr, D.chaveRegistro(v6Cob), em(0, 11));
+    igual('cobrança: grava cobradoEm e soma 1 em cobrancas; os outros não mudam', [v6Cr[0].cobradoEm === v6.iso(0, 10), v6Cr[0].cobrancas, v6Cr2[0].cobradoEm === v6.iso(0, 11), v6Cr2[0].cobrancas, 'cobrancas' in v6Cr[1], 'cobrancas' in v6Cob].join('|'), 'true|1|true|2|false|false');
+
+    // pra fazer hoje
+    var v6Mais = [];   // monta o dia com um de cada situação
+    v6Mais.push(D.lerRegistro(mkReg(101, 2, { total: 100, validadeAte: '2026-11-14' })), D.lerRegistro(mkReg(102, 1, { total: 154, validadeAte: '2026-11-14' })));       // 2 vencem hoje (R$ 254)
+    v6Mais.push(D.novoPedido({ cliente: 'Zeca', texto: 'quero chaveiros' }, em(2, 9)), D.novoPedido({ texto: 'outro' }, em(0, 9)), D.novoPedido({ texto: 'mais um' }, em(1, 9)));    // 3 pedidos, o mais antigo há 2 dias
+    v6Mais.push(D.lerRegistro(mkReg(42, 9, { cliente: 'Ana', total: 186 })), D.lerRegistro(mkReg(43, 8, { total: 50 })), D.lerRegistro(mkReg(44, 10, { cliente: 'Bruno', total: 70, cobradoEm: v6.iso(1) })), D.lerRegistro(mkReg(45, 6, { total: 70 })));   // cobrar: 42 e 43
+    v6Mais.push(D.lerRegistro(v6.venda(50, 2, 640, { cliente: 'Carlos', pagamento: { condicao: 'entrada', entradaPrevista: 320, recebimentos: [] } })));    // receber entrada
+    v6Mais.push(D.lerRegistro(v6.venda(51, 4, 100, { cliente: 'Bia', status: 'pronto', pagamento: { condicao: 'pago', recebimentos: [{ valor: 100, em: v6.iso(4), forma: 'pix' }] } })),
+      D.lerRegistro(v6.venda(52, 4, 100, { cliente: 'Loja Exemplo', status: 'pronto', pagamento: { condicao: 'pago', recebimentos: [{ valor: 100, em: v6.iso(4), forma: 'pix' }] } })));     // 2 prontos
+    v6Mais.push(D.lerRegistro(v6.venda(53, 6, 200, { cliente: 'Davi', status: 'entregue', pagamento: { condicao: 'entrada', entradaPrevista: 100, recebimentos: [{ valor: 100, em: v6.iso(6), forma: 'pix' }] } })));     // receber restante
+    v6Mais.push(D.lerRegistro(v6.venda(54, 5, 90, { prazoDesejado: '2026-11-10', pagamento: { condicao: 'pago', recebimentos: [{ valor: 90, em: v6.iso(5), forma: 'pix' }] } })));    // prazo vencido
+    v6Mais.push(D.lerRegistro(mkReg(55, 12, { total: 100, validadeAte: '2026-11-01' })), D.lerRegistro(mkReg(56, 12, { total: 366.2, validadeAte: '2026-11-05' })));       // 2 vencidos
+    var v6Ok = { em: v6.iso(0, 8) };   // backup de hoje cedo: sem lembrete
+    var v6Tf = D.tarefasHoje(v6Mais, hojeH, v6Ok);
+    igual('tarefas: ordem de prioridade', v6.tipos(v6Tf), 'vencem-hoje,pedidos,cobrar,cobrar,receber-entrada,prontos,receber-restante,prazo-vencido,vencidos');
+    igual('tarefas: vencem hoje (agrupado, com a soma e o filtro)', [v6Tf[0].texto, v6Tf[0].valor, v6Tf[0].acao, v6Tf[0].alvo.tela, JSON.stringify(v6Tf[0].alvo.filtro)].join('|'), '2 orçamentos vencem hoje|254|Ver|pedidos|{"situacao":"enviado","venceEm":"2026-11-14"}');
+    igual('tarefas: pedidos para orçar (o mais antigo)', v6Tf[1].texto + '|' + v6Tf[1].alvo.filtro.situacao, '3 pedidos para orçar · o mais antigo há 2 dias|pedido');
+    igual('tarefas: cobrar resposta, um por orçamento, do mais antigo (7 dias ou mais; cobrado há 1 dia sai)', [v6Tf[2].texto, v6Tf[2].valor, v6Tf[2].acao, v6Tf[2].chave === D.chaveRegistro(v6Mais[5]), v6Tf[3].texto, v6Tf[3].valor].join('|'), 'Ana: sem resposta há 9 dias · Nº 0042|186|Cobrar|true|Nº 0043: sem resposta há 8 dias|50');
+    igual('tarefas: receber entrada', [v6Tf[4].texto, v6Tf[4].valor, v6Tf[4].acao, v6Tf[4].alvo.tela].join('|'), 'Receber entrada do Carlos|320|Recebi|recebimento');
+    igual('tarefas: prontos para entregar com os nomes', v6Tf[5].texto + '|' + v6Tf[5].alvo.filtro.situacao, '2 prontos para entregar · Bia e Loja Exemplo|pronto');
+    igual('tarefas: receber restante', [v6Tf[6].texto, v6Tf[6].valor].join('|'), 'Receber restante de Davi|100');
+    igual('tarefas: prazo vencido e vencidos', [v6Tf[7].texto, v6Tf[8].texto, v6Tf[8].valor, v6Tf[8].alvo.filtro.situacao].join('|'), '1 pedido com prazo vencido|2 orçamentos vencidos|466.2|vencido');
+    igual('tarefas: cobrado há 2 dias ainda some; há 3 dias volta; cobrado hoje some', [2, 3, 0].map(function (d) { return D.tarefasHoje([Object.assign({}, v6Mais[5], { cobradoEm: v6.iso(d) })], hojeH, v6Ok).length; }).join('|'), '0|1|0');
+    igual('tarefas: com 7 dias exatos cobra; com 6 não; vencido não cobra, vira vencidos', [D.tarefasHoje([mkReg(1, 7)], hojeH, v6Ok).length, D.tarefasHoje([mkReg(1, 6)], hojeH, v6Ok).length, v6.tipos(D.tarefasHoje([mkReg(1, 9, { validadeAte: '2026-11-10' })], hojeH, v6Ok))].join('|'), '1|0|vencidos');
+    igual('tarefas: singular de vence hoje e de pedido para orçar', [D.tarefasHoje([mkReg(1, 1, { validadeAte: '2026-11-14', total: 80 })], hojeH, v6Ok)[0].texto, D.tarefasHoje([v6Mais[2]], hojeH, v6Ok)[0].texto, D.tarefasHoje([D.novoPedido({ texto: 'a' }, em(0, 8))], hojeH, v6Ok)[0].texto].join('|'),
+      '1 orçamento vence hoje|1 pedido para orçar · há 2 dias|1 pedido para orçar · chegou hoje');
+    var v6Pr = D.lerRegistro(v6.venda(80, 1, 100, { cliente: 'Eva', status: 'pronto', pagamento: { condicao: 'entrada', entradaPrevista: 50, recebimentos: [] } }));
+    igual('tarefas: pronto sem entrada recebida pede a entrada e não repete como restante', v6.tipos(D.tarefasHoje([v6Pr], hojeH, v6Ok)), 'receber-entrada,prontos');
+    igual('tarefas: pronto com pagamento "na entrega" pede o valor inteiro', (function () {
+      var t = D.tarefasHoje([D.lerRegistro(v6.venda(81, 1, 100, { cliente: 'Fábio', status: 'pronto' }))], hojeH, v6Ok);
+      return v6.tipos(t) + '|' + t[1].texto + '|' + t[1].valor;
+    })(), 'prontos,receber-restante|Receber de Fábio|100');
+    igual('tarefas: sem cliente usa o número', D.tarefasHoje([D.lerRegistro(v6.venda(82, 1, 100, { status: 'entregue' }))], hojeH, v6Ok)[0].texto, 'Receber · Nº 0082');
+    igual('tarefas: dia em dia dá lista vazia ("Tudo em dia")', D.tarefasHoje([mkReg(1, 1), v6.venda(2, 1, 50, { status: 'entregue', pagamento: { condicao: 'pago', recebimentos: [{ valor: 50, em: v6.iso(1), forma: 'pix' }] } })], hojeH, v6Ok).length + '|' + D.tarefasHoje([], hojeH, null).length + '|' + D.tarefasHoje(null, hojeH, null).length, '0|0|0');
+    var v6Vinte = []; for (var v6J = 0; v6J < 20; v6J++) v6Vinte.push(mkReg(300 + v6J, 1));
+    igual('tarefas: backup com 20 registros desde o último', [D.tarefasHoje(v6Vinte, hojeH, null)[0].tipo, D.tarefasHoje(v6Vinte, hojeH, null)[0].texto, D.tarefasHoje(v6Vinte, hojeH, null)[0].acao, D.tarefasHoje(v6Vinte.slice(1), hojeH, null).length, D.tarefasHoje(v6Vinte, hojeH, { em: v6.iso(0, 9) }).length].join('|'), 'backup|Fazer backup · 20 orçamentos sem backup|Fazer|0|0');
+    var v6Cheio = v6Gr.slice(0, 4500).map(function (r) { return Object.assign({}, r, { status: 'recusado' }); });
+    igual('tarefas: perto do limite de registros (4.500) leva ao backup', (function () {
+      var t = D.tarefasHoje(v6Cheio, hojeH, { em: hojeH.toISOString() });
+      return t.length + '|' + t[0].tipo + '|' + t[0].alvo.tela;
+    })(), '1|limite|config-backup');
+    igual('tarefas: backup e limite ficam por último', v6.tipos(D.tarefasHoje(v6Mais.concat(v6Cheio), hojeH, null).slice(-2)), 'backup,limite');
+
+    // primeiro uso
+    igual('primeiro uso: sem registros e sem configuração', JSON.stringify(D.primeiroUso([], null)), '{"primeiroUso":true,"itens":[{"chave":"filamento","texto":"Preço do seu filamento","feito":false,"alvo":"config-filamentos"},{"chave":"negocio","texto":"Meu negócio","feito":false,"alvo":"config-negocio"}]}');
+    igual('primeiro uso: ✓ quando já salvou Configurações e quando o negócio tem nome', [D.primeiroUso([], { perdaPct: 5 }).itens[0].feito, D.primeiroUso([], { perdaPct: 5 }).itens[1].feito, D.primeiroUso([], { negocio: { nome: ' Mundo 3DI ' } }).itens[1].feito, D.primeiroUso([], { negocio: { nome: ' ' } }).itens[1].feito, D.primeiroUso([], {}).itens[0].feito].join('|'), 'true|false|true|false|false');
+    igual('primeiro uso: some depois do primeiro orçamento ou pedido', D.primeiroUso([mkReg(1, 0)], null).primeiroUso + '|' + D.primeiroUso([v6Ped], null).primeiroUso + '|' + D.primeiroUso(null, null).primeiroUso, 'false|false|true');
+
+    // backup formato 2, formato 1 e planilha
+    var v6Dados = { config: { perdaPct: 5 }, contador: 80, registros: [v6Ped, v6Orc.lista[1], v6Of, v6Cn1], catalogo: [], materialAtual: 'PLA' };
+    var v6Bk = D.montarBackup(v6Dados, { ambiente: 'teste', versaoApp: '0.6.0-teste.1', criadoEm: em(0, 18) });
+    var v6Lido = D.lerBackup(JSON.stringify(v6Bk));
+    igual('backup v2: formato 2 e ida e volta com pedidos, etapas e pagamentos', [v6Bk.formato, v6Lido.ok, JSON.stringify(v6Lido.backup.dados.registros) === JSON.stringify(D.montarDados(v6Dados).registros), v6Lido.backup.dados.registros[3].pagamento.recebimentos.length].join('|'), '2|true|true|2');
+    var v6Bk1 = JSON.stringify({ app: 'mundo3di', formato: 1, ambiente: 'producao', versaoApp: '0.5.3', criadoEm: em(1).toISOString(), dados: { config: {}, contador: 5, registros: [mkReg(1, 5, { status: 'aprovado', statusEm: v6.iso(2) }), mkReg(2, 5)], catalogo: [] } });
+    var v6L1 = D.lerBackup(v6Bk1);
+    igual('backup v1: a 0.6.0 ainda restaura e migra aprovadoEm', [v6L1.ok, v6L1.backup.formato, v6L1.backup.dados.registros[0].aprovadoEm === v6.iso(2), 'aprovadoEm' in v6L1.backup.dados.registros[1]].join('|'), 'true|1|true|false');
+    igual('backup v1: restaurar junta sem repetir e as vendas continuam nos mesmos dias', D.resumoVendas(D.restaurarDados({ registros: [] }, v6L1.backup.dados).registros, 'tudo', hojeH).vendas, 10);
+    igual('backup: formato 3 (futuro) pede atualizar o app', D.lerBackup('{"app":"mundo3di","formato":3,"dados":{}}').erro, 'novo');
+    var v6Re = D.resumoBackup(v6Lido.backup);
+    igual('backup: pedido sem número não conta como orçamento nem entra na faixa de números', [v6Re.orcamentos, v6Re.pedidos, v6Re.numMin, v6Re.numMax, D.descreverOrcamentos(v6Re)].join('|'), '3|1|20|77|3 orçamentos (Nº 0020 a 0077) e 1 pedido ainda sem orçamento');
+    igual('backup: só pedidos', D.descreverOrcamentos({ orcamentos: 0, pedidos: 2 }) + '|' + D.descreverOrcamentos({ orcamentos: 0, pedidos: 0 }), '2 pedidos ainda sem orçamento|Nenhum orçamento');
+    var v6Csv = D.gerarCSV([v6Ped, D.lerRegistro(v6.venda(90, 2, 186, { cliente: 'Ana', status: 'producao', pagamento: { condicao: 'entrada', entradaPrevista: 93, recebimentos: [{ valor: 93, em: v6.iso(2), forma: 'pix' }] } })), D.lerRegistro(mkReg(91, 0, { total: 10 }))], hojeH).split('\r\n');
+    igual('planilha v6: cabeçalho com as colunas novas no fim', v6Csv[0].replace('﻿', '').split(';').slice(-6).join(';'), 'Etapa;Data da aprovação;Data da etapa atual;Condição;Recebido;Falta');
+    igual('planilha v6: pedido sem número', v6Csv[2].split(';')[0] + '|' + v6Csv[2].split(';')[12] + '|' + v6Csv[2].split(';').slice(14).join(';'), 'Pedido|Pedido|Pedido;;;;;');
+    igual('planilha v6: venda em produção com entrada paga', v6Csv[1].split(';').slice(12).join(';'), 'Produção;0;Produção;12/11/2026;12/11/2026;Entrada + restante;93,00;93,00');
+    igual('planilha v6: orçado sem pagamento e mesmo número de colunas em todas as linhas', v6Csv[3].split(';').slice(12).join(';') + '|' + v6Csv.slice(0, 4).map(function (l) { return l.split(';').length; }).join(','), 'Orçado;0;Orçado;;;;;|20,20,20,20');
 
     return resultados;
   }
