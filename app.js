@@ -1314,7 +1314,7 @@
     if (lim.cheio) { avisar(lim.texto); return; }
     $('ped-cliente').value = ''; $('ped-texto').value = ''; $('ped-qtd').value = '1'; $('ped-prazo').value = ''; pedCanal = ''; desenharCanalPedido();
     $('folha-pedido').hidden = false;
-    $('ped-texto').focus();
+    $('ped-cliente').focus();
   }
   function fecharAnotarPedido() { $('folha-pedido').hidden = true; }
   $('ped-novo').addEventListener('click', abrirAnotarPedido);
