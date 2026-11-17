@@ -318,6 +318,7 @@
     } catch (e) { /* armazenamento indisponível: o envio continua valendo, só não fica registrado */ }
     /* Peça do catálogo: o valor enviado vira a referência e ela sobe de uso */
     if (reg.catalogoId) gravarCatalogo(D.registrarUsoPeca(lerCatalogo(), reg.catalogoId, reg.valorPeca, new Date(reg.ts)));
+    mostrarEnviado(numero);
   }
   /* Reenvio: mesmo número, o contador não anda; soma 1 em "reenvios" */
   function registrarReenvio(reg, extra) {
@@ -707,7 +708,8 @@
   $('form-config').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var ok = gravarConfigTela();
-    sairConfig();
+    configInicial = JSON.stringify(lerConfigTela());
+    if (subDaRota()) voltarTarefa('mais'); else atualizarBarraConfig();   // Salvar volta à lista de Mais
     avisar(ok ? 'Configurações salvas' : 'Salvo só até fechar o app');
   });
   /* Restaura hora (modo Simples), perda, preço mínimo e arredondamento (Exato); a lista de filamentos, o modo escolhido, os dados da impressora e os dados do negócio são mantidos */
@@ -1126,7 +1128,7 @@
     var peca = reg.catalogoId ? D.acharPeca(lerCatalogo(), reg.catalogoId) : null;
     vinculo = peca ? { id: peca.id, nome: peca.nome } : null;
     atualizar();
-    sairConfig();
+    irParaOrcar();
     avisar(aviso || 'Dados do orçamento Nº ' + C.formatarNumero(reg.n) + ' na tela');
   }
   /* Põe na tela principal os campos de uma entrada (c = D.entradaParaCampos). Devolve um aviso, se algum filamento não existe mais. */
@@ -1341,13 +1343,13 @@
   $('cp-abrir').addEventListener('click', function () {
     var p = pedido && D.acharPeca(lerCatalogo(), pedido.id); if (!p) return;
     var aviso = pedidoNaTela(p, qtdPedido());
-    fecharPedido(); sairConfig();
+    fecharPedido(); irParaOrcar();
     avisar(aviso || 'Peça “' + (p.nome.length > 30 ? p.nome.slice(0, 29).trim() + '…' : p.nome) + '” na tela');   // o aviso é estreito: nome de até 120 letras vai abreviado
   });
   $('cp-enviar').addEventListener('click', function () {
     var p = pedido && D.acharPeca(lerCatalogo(), pedido.id); if (!p) return;
     pedidoNaTela(p, qtdPedido());
-    fecharPedido(); sairConfig();
+    fecharPedido(); irParaOrcar();
     abrirFolha(null);                // direto no painel de envio, com a descrição da peça já preenchida
   });
 
@@ -1498,15 +1500,15 @@
      Todos os campos continuam no mesmo formulário (só mostrar/esconder): ir e voltar entre a lista e as subtelas não perde nada do que foi digitado. */
   var SUBS = { filamentos: 'Filamentos', custos: 'Custos', negocio: 'Meu negócio', backup: 'Backup e dados' };
   var telaAtual = '';
-  var subAberta = false;   // subtela aberta tocando na lista: há uma entrada a mais no histórico
   function subDaRota() { var m = /^#config-(\w+)$/.exec(location.hash); return m && SUBS[m[1]] ? m[1] : ''; }
   function mostrarSub(sub) {
     $('cfg-lista').hidden = !!sub;
     $('form-config').hidden = !sub || sub === 'backup';
     Array.prototype.forEach.call(document.querySelectorAll('#form-config [data-sub]'), function (s) { s.hidden = s.dataset.sub !== sub; });
     $('cartao-backup').hidden = sub !== 'backup';
-    $('cfg-titulo').textContent = sub ? SUBS[sub] : 'Configurações';
+    $('cfg-titulo').textContent = sub ? SUBS[sub] : 'Mais';
     $('cfg-trilha').hidden = !sub;
+    $('voltar').hidden = !sub;
     if (sub !== 'backup') fecharPaineisBackup();
   }
   /* Uma linha de resumo por área, calculada do que está na tela (inclui o que ainda não foi salvo) */
@@ -1523,6 +1525,8 @@
     if (logoPendente || (logoPendente === undefined && lerLogoSalvo())) partes.push('logo próprio');
     $('res-negocio').textContent = partes.length ? partes.join(' · ') : 'Ainda não preenchido: o orçamento usa o logo 3Di';
     $('res-backup').textContent = $('backup-titulo').textContent;
+    var pecas = lerCatalogo(), nPecas = Array.isArray(pecas) ? pecas.length : 0;
+    $('res-catalogo').textContent = nPecas ? nPecas + (nPecas === 1 ? ' peça salva' : ' peças salvas') : 'Nenhuma peça salva ainda';
   }
   /* Barra "Alterações não salvas · Salvar": aparece em qualquer parte de Configurações quando há algo digitado e não salvo */
   function atualizarBarraConfig() {
@@ -1533,20 +1537,94 @@
   ['input', 'change', 'click'].forEach(function (ev) {
     $('form-config').addEventListener(ev, function () { setTimeout(atualizarBarraConfig, 0); });
   });
-  Array.prototype.forEach.call(document.querySelectorAll('.cfg-item'), function (b) {
-    b.addEventListener('click', function () { subAberta = true; location.hash = 'config-' + b.dataset.sub; });
+  Array.prototype.forEach.call(document.querySelectorAll('.cfg-item[data-sub]'), function (b) {
+    b.addEventListener('click', function () { irTarefa('config-' + b.dataset.sub); });
+  });
+  /* Itens de Mais (e das telas provisórias) que abrem outra tela */
+  Array.prototype.forEach.call(document.querySelectorAll('.cfg-item[data-ir]'), function (b) {
+    b.addEventListener('click', function () {
+      var destino = b.dataset.ir;
+      sairDaConfig(function () {
+        if (destino === 'historico') { histSituacao = ''; origemHist = ''; histLimite = 50; }
+        irTarefa(destino);
+      });
+    });
   });
 
-  /* ---------- Navegação (o botão voltar do Android funciona) ---------- */
-  function telaDaRota() { return location.hash === '#config' || subDaRota() ? 'config' : location.hash === '#historico' ? 'hist' : location.hash === '#vendas' ? 'vendas' : location.hash === '#catalogo' ? 'cat' : 'calc'; }
-  /* Troca entre Lista e Vendas (e vai da fila do painel ao Histórico) sem empilhar tela: o voltar do Android continua levando à calculadora. */
-  function trocarAba(destino) { history.replaceState(null, '', location.pathname + location.search + '#' + destino); rota(); }
+  /* ---------- Navegação (o botão voltar do Android funciona) ----------
+     Quatro abas (Início, Pedidos, Negócio, Mais) trocam sem empilhar histórico, exceto a primeira saída de Início: assim o voltar de qualquer aba leva ao Início.
+     Telas de tarefa (Novo orçamento, Catálogo, Painel de vendas, Orçamentos, subtelas de Mais) empilham, ficam sem a barra de abas e voltam pela seta.
+     Cada entrada do histórico guarda { d: quantas entradas há acima do Início, aba: 1 se é uma aba aberta a partir do Início }. */
+  var BASE = location.pathname + location.search;
+  var TELA_DA_ROTA = { pedidos: 'pedidos', negocio: 'negocio', historico: 'hist', vendas: 'vendas', catalogo: 'cat', orcar: 'calc' };
+  function hashAtual() { return location.hash.replace(/^#/, ''); }
+  function profundidade() { var e = history.state; return e && typeof e.d === 'number' ? e.d : 0; }
+  function telaDaRota() {
+    var h = hashAtual();
+    if (h === 'config' || h === 'mais' || subDaRota()) return 'config';
+    return Object.prototype.hasOwnProperty.call(TELA_DA_ROTA, h) ? TELA_DA_ROTA[h] : 'inicio';   // rota desconhecida abre o Início
+  }
+  function abaDaTela(t, sub) { return t === 'inicio' || t === 'pedidos' || t === 'negocio' ? t : t === 'config' && !sub ? 'mais' : ''; }
+  /* Troca entre Lista e Vendas (e vai da fila do painel ao Histórico) sem empilhar tela */
+  function trocarAba(destino) { history.replaceState(history.state, '', BASE + '#' + destino); rota(); }
+  function irTarefa(h) { history.pushState({ d: profundidade() + 1 }, '', BASE + '#' + h); rota(); }
+  function irInicio() {
+    var d = profundidade();
+    if (d > 0) history.go(-d); else { history.replaceState({ d: 0 }, '', BASE + '#inicio'); rota(); }
+  }
+  /* Seta "←": volta uma entrada; se a tela foi aberta direto (sem histórico), cai na tela indicada */
+  function voltarTarefa(fallback) {
+    if (profundidade() > 0) history.back();
+    else { history.replaceState({ d: 0 }, '', BASE + '#' + (fallback || 'inicio')); rota(); }
+  }
+  /* Abre o Novo orçamento no lugar da tela atual (vindo do histórico ou do catálogo): o voltar leva a onde se estava antes dela */
+  function irParaOrcar() { history.replaceState({ d: Math.max(1, profundidade()) }, '', BASE + '#orcar'); rota(); }
+  function irAba(h) {
+    if (h === 'orcar') { irTarefa('orcar'); return; }
+    var atual = abaDaTela(telaAtual, subDaRota());
+    if (h === atual) { window.scrollTo(0, 0); return; }     // tocar na aba aberta volta ao topo dela
+    if (h === 'inicio') { irInicio(); return; }
+    if (atual === 'inicio') history.pushState({ d: profundidade() + 1, aba: 1 }, '', BASE + '#' + h);
+    else history.replaceState(history.state, '', BASE + '#' + h);
+    rota();
+  }
+  /* Quem sai de Mais com alteração não salva escolhe: Salvar ou Descartar */
+  var depoisDeSair = null;
+  function sairDaConfig(acao) {
+    if ($('tela-config').hidden || !configAlterada()) { acao(); return; }
+    depoisDeSair = acao; $('folha-sair-cfg').hidden = false;
+  }
+  function fecharSairCfg() { $('folha-sair-cfg').hidden = true; depoisDeSair = null; }
+  $('sair-cfg-fundo').addEventListener('click', fecharSairCfg);
+  $('sair-cfg-descartar').addEventListener('click', function () {
+    var acao = depoisDeSair; fecharSairCfg();
+    logoPendente = undefined; configInicial = JSON.stringify(lerConfigTela());
+    if (acao) acao();
+  });
+  $('sair-cfg-salvar').addEventListener('click', function () {
+    var acao = depoisDeSair, ok = gravarConfigTela(); fecharSairCfg();
+    configInicial = JSON.stringify(lerConfigTela());
+    avisar(ok ? 'Configurações salvas' : 'Salvo só até fechar o app');
+    if (acao) acao();
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !$('folha-sair-cfg').hidden) fecharSairCfg(); });
+
   function mostrar(tela, sub) {
+    fecharEnviado();
+    $('tela-inicio').hidden = tela !== 'inicio';
+    $('tela-pedidos').hidden = tela !== 'pedidos';
+    $('tela-negocio').hidden = tela !== 'negocio';
     $('tela-calc').hidden = tela !== 'calc';
     $('tela-config').hidden = tela !== 'config';
     $('tela-hist').hidden = tela !== 'hist';
     $('tela-vendas').hidden = tela !== 'vendas';
     $('tela-cat').hidden = tela !== 'cat';
+    var aba = abaDaTela(tela, sub);
+    $('abas').hidden = !aba;
+    document.body.classList.toggle('com-abas', !!aba);
+    Array.prototype.forEach.call(document.querySelectorAll('#abas [data-nav]'), function (b) {
+      if (b.dataset.nav === aba) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
     var entrando = telaAtual !== 'config';
     telaAtual = tela;
     if (tela === 'config') {
@@ -1559,31 +1637,46 @@
     desenharVersao();
     window.scrollTo(0, 0);
   }
-  function rota() {
-    var t = telaDaRota();
-    if (t === 'calc') veioDaCalc = false;
-    if (!subDaRota()) subAberta = false;
-    mostrar(t, t === 'config' ? subDaRota() : '');
-  }
+  function rota() { var t = telaDaRota(); mostrar(t, t === 'config' ? subDaRota() : ''); }
   window.addEventListener('hashchange', rota);
-  var veioDaCalc = false;
-  function sairConfig() {
-    if (veioDaCalc) { var passos = subAberta ? 2 : 1; veioDaCalc = false; subAberta = false; history.go(-passos); }
-    else { history.replaceState(null, '', location.pathname + location.search); rota(); }
-  }
-  $('ir-config').addEventListener('click', function () { veioDaCalc = true; location.hash = 'config'; });
-  $('ir-hist').addEventListener('click', function () { veioDaCalc = true; histSituacao = ''; origemHist = ''; location.hash = 'historico'; });
-  $('voltar').addEventListener('click', function () {
-    if (!subDaRota()) { sairConfig(); return; }                 // na lista: sai de Configurações
-    if (subAberta) { subAberta = false; history.back(); }       // numa subtela: volta à lista
-    else { history.replaceState(null, '', location.pathname + location.search + '#config'); rota(); }
+
+  /* Quem abre o app direto numa rota que não é o Início (atalho, recarga sem histórico) ganha o Início por baixo, para o voltar funcionar */
+  (function normalizarEntrada() {
+    var h = hashAtual();
+    if (profundidade() > 0 || !h || h === 'inicio') return;
+    var t = telaDaRota(), sub = subDaRota(), aba = abaDaTela(t, sub);
+    history.replaceState({ d: 0 }, '', BASE + '#inicio');
+    if (t === 'inicio') return;
+    if (aba) history.pushState({ d: 1, aba: 1 }, '', BASE + '#' + aba);
+    else if (t === 'config') {
+      history.pushState({ d: 1, aba: 1 }, '', BASE + '#mais');
+      history.pushState({ d: 2 }, '', BASE + '#' + h);
+    } else history.pushState({ d: 1 }, '', BASE + '#' + h);
+  })();
+
+  Array.prototype.forEach.call(document.querySelectorAll('#abas [data-nav]'), function (b) {
+    b.addEventListener('click', function () { var destino = b.dataset.nav; sairDaConfig(function () { irAba(destino); }); });
   });
+  $('voltar').addEventListener('click', function () { voltarTarefa('mais'); });
+  $('calc-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
   $('hist-voltar').addEventListener('click', function () {
-    if (origemHist === 'vendas') { origemHist = ''; histSituacao = ''; trocarAba('vendas'); } else sairConfig();   // aberto pela fila do painel: volta ao painel
+    if (origemHist === 'vendas') { origemHist = ''; histSituacao = ''; trocarAba('vendas'); } else voltarTarefa('inicio');   // aberto pela fila do painel: volta ao painel
   });
-  $('vendas-voltar').addEventListener('click', sairConfig);
-  $('cat-voltar').addEventListener('click', sairConfig);
-  $('cat-abrir').addEventListener('click', function () { veioDaCalc = true; location.hash = 'catalogo'; });
+  $('vendas-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
+  $('cat-voltar').addEventListener('click', function () { voltarTarefa('mais'); });
+  $('cat-abrir').addEventListener('click', function () { irTarefa('catalogo'); });
+
+  /* Depois de enviar: aviso curto sobre o Novo orçamento (os campos continuam preenchidos) */
+  var timerEnviado;
+  function fecharEnviado() { clearTimeout(timerEnviado); $('env-aviso').hidden = true; }
+  function mostrarEnviado(numero) {
+    if ($('tela-calc').hidden) return;
+    $('env-titulo').textContent = 'Orçamento Nº ' + C.formatarNumero(numero) + ' enviado';
+    $('env-aviso').hidden = false;
+    clearTimeout(timerEnviado); timerEnviado = setTimeout(fecharEnviado, 6000);
+  }
+  $('env-fundo').addEventListener('click', fecharEnviado);
+  $('env-inicio').addEventListener('click', function () { fecharEnviado(); irInicio(); });
 
   /* ---------- Convite para instalar ---------- */
   var instalado = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
