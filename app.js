@@ -940,7 +940,7 @@
 
   /* ---------- Histórico de orçamentos ---------- */
   var LEMBRETE_BACKUP_ATIVO = true;    // faixa de lembrete de backup no topo do histórico (20 ou mais orçamentos desde o último backup)
-  var histPeriodo = '30', histSituacao = '', histBusca = '', histLimite = 50, histTimerBusca;
+  var histPeriodo = '30', histSituacao = '', histPagamento = '', histBusca = '', histLimite = 50, histTimerBusca;
   var CHAVE_PERIODO = CHAVE + '-periodo';          // período escolhido (vale para a Lista e para o painel de vendas)
   try { var perSalvo = localStorage.getItem(CHAVE_PERIODO); if (['hoje', '7', '30', 'mes', 'tudo'].indexOf(perSalvo) !== -1) histPeriodo = perSalvo; } catch (e) {}
   var ESPERA = ['pedido', 'enviado', 'vencido', 'producao', 'embalagem', 'pronto'];   // filas de trabalho: sem período, do mais antigo para o mais novo
@@ -957,8 +957,8 @@
   }
   function desenharHist() {
     var todos = lerLista(), hoje = new Date();
-    var espera = ESPERA.indexOf(histSituacao) !== -1;
-    var lista = D.filtrarRegistros(todos, { periodo: histPeriodo, situacao: histSituacao, busca: histBusca, hoje: hoje });
+    var espera = ESPERA.indexOf(histSituacao) !== -1 || (!histSituacao && !!histPagamento);
+    var lista = D.filtrarRegistros(todos, { periodo: histPeriodo, situacao: histSituacao, pagamento: histPagamento, busca: histBusca, hoje: hoje });
     var res = D.resumir(lista);
     $('hist-n').textContent = String(lista.filter(function (r) { return r.status !== 'pedido'; }).length);   // pedido ainda sem orçamento não conta como enviado
     $('hist-total').textContent = moeda(res.total);
@@ -975,10 +975,15 @@
       b.textContent = D.ROTULOS_ETAPA[st] + (CONTAR_NO_CHIP.indexOf(st) !== -1 && cont[st] ? ' ' + cont[st] : '');
     });
     $('hist-per').hidden = espera;
-    $('hist-resumo').hidden = !!histSituacao;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pag]'), function (b) {
+      var pg = b.dataset.pag;
+      b.setAttribute('aria-pressed', String(pg === histPagamento));
+      b.textContent = D.ROTULOS_PAGAMENTO[pg] + (cont.pagamento[pg] ? ' ' + cont.pagamento[pg] : '');
+    });
+    $('hist-resumo').hidden = !!histSituacao || !!histPagamento;
     var resSit = $('hist-sit-resumo');
-    resSit.hidden = !histSituacao;
-    if (histSituacao) {
+    resSit.hidden = !histSituacao && !histPagamento;
+    if (histSituacao || histPagamento) {
       var ordem = espera ? ' · mais antigos primeiro' : '';
       resSit.textContent = res.qtd + (res.qtd === 1 ? ' registro' : ' registros') + (res.total > 0 ? ' · ' + moeda(res.total) : '') + ordem;
     }
@@ -993,6 +998,7 @@
       vazio.hidden = false;
       vazio.textContent = !todos.length ? 'Nenhum pedido ainda. Toque em + Pedido para anotar um, ou em + Orçar para fazer um orçamento.'
         : histBusca ? 'Nada encontrado para “' + histBusca + '”.'
+        : histPagamento && !histSituacao ? 'Nenhum pedido com pagamento ' + D.ROTULOS_PAGAMENTO[histPagamento].toLowerCase() + '.'
         : histSituacao === 'enviado' ? 'Nenhum orçamento aguardando resposta.'
         : histSituacao === 'vencido' ? 'Nenhum orçamento vencido.'
         : histSituacao === 'pedido' ? 'Nenhum pedido para orçar.'
@@ -1015,12 +1021,16 @@
         var st = D.situacao(r, hoje);
         if (r.status === 'pedido') { if (r.prazoDesejado) dir.appendChild(el('b', '', 'prazo ' + D.validadeCurta(r.prazoDesejado, hoje))); }
         else dir.appendChild(el('b', '', moeda(r.total)));
+        var pills = el('span', 'pills');
         if (espera && (st === 'enviado' || st === 'vencido')) {
           var te = D.textoEspera(r, hoje);
-          dir.appendChild(el('span', 'pill ' + (te.antigo ? 'vencido' : 'enviado'), te.texto));
+          pills.appendChild(el('span', 'pill ' + (te.antigo ? 'vencido' : 'enviado'), te.texto));
         } else {
-          dir.appendChild(el('span', 'pill ' + st, rotuloEtapa(st)));
+          pills.appendChild(el('span', 'pill ' + st, rotuloEtapa(st)));
         }
+        var pgl = D.situacaoPagamento(r);
+        if (pgl.estado) pills.appendChild(el('span', 'pill-pag ' + pgl.estado, pgl.rotulo));
+        dir.appendChild(pills);
         it.appendChild(meio); it.appendChild(dir);
         it.addEventListener('click', function () { abrirDetalhe(r); });
         bloco.appendChild(it);
@@ -1047,6 +1057,9 @@
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-sit]'), function (b) {
     b.addEventListener('click', function () { histSituacao = histSituacao === b.dataset.sit ? '' : b.dataset.sit; histLimite = 50; desenharHist(); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-pag]'), function (b) {
+    b.addEventListener('click', function () { histPagamento = histPagamento === b.dataset.pag ? '' : b.dataset.pag; histLimite = 50; desenharHist(); });
   });
   $('hist-mais').addEventListener('click', function () { histLimite += 50; desenharHist(); });
 
@@ -1095,11 +1108,123 @@
     $('det-st-info').textContent = st === 'vencido' ? 'Venceu em ' + D.validadeCurta(reg.validadeAte, hoje) + '. Marque Aprovado ou Recusado quando o cliente responder.'
       : reg.statusEm && reg.status !== 'enviado' ? D.ROTULOS_ETAPA[reg.status] + ' em ' + dm(reg.statusEm) : '';
     if (venda || cancelado) desenharEtapa(reg, hoje);
+    desenharPagamento(reg);
     $('det-antigo').hidden = pedido || !!reg.entrada;
     $('det-usar').disabled = !reg.entrada;
     $('det-catalogo').disabled = !reg.entrada;  // registro antigo, sem os dados da mesa, não vira peça
     $('det-excluir').textContent = 'Excluir';
   }
+  /* Pagamento (de Aprovado a Entregue): etiqueta calculada, condição, recebimentos e botão para registrar */
+  var FORMA_ROT = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão', transferencia: 'Transferência', outro: 'Outro', estorno: 'Devolvido' };
+  function desenharPagamento(reg) {
+    var pg = D.situacaoPagamento(reg);
+    mostrarSo('det-bloco-pag', !!pg.estado);
+    if (!pg.estado) return;
+    $('det-pag-pill').className = 'pill-pag ' + pg.estado; $('det-pag-pill').textContent = pg.rotulo;
+    $('det-pag-info').textContent = pg.estado === 'pago' ? 'Total ' + moeda(pg.total) : pg.texto;
+    var cond = reg.pagamento && reg.pagamento.condicao ? reg.pagamento.condicao : 'entrega';
+    var txt = D.ROTULOS_CONDICAO[cond] || '';
+    if (cond === 'entrada' && reg.pagamento.entradaPrevista) txt += ' · entrada prevista ' + moeda(reg.pagamento.entradaPrevista);
+    $('det-pag-cond').textContent = txt;
+    $('det-rec-novo').hidden = pg.estado === 'pago';
+    var box = $('det-recs'); box.textContent = '';
+    var recs = reg.pagamento && reg.pagamento.recebimentos ? reg.pagamento.recebimentos : [];
+    recs.forEach(function (rc, i) {
+      var li = el('div', 'rec-linha');
+      var neg = rc.valor < 0;
+      var t = el('span', neg ? 'neg' : '', dm(rc.em) + ' · ' + (FORMA_ROT[rc.forma] || 'Outro') + ' · ' + (neg ? '− ' + moeda(-rc.valor) : moeda(rc.valor)));
+      var x = el('button', '', 'Excluir'); x.type = 'button';
+      x.addEventListener('click', function () {
+        if (!x.classList.contains('certeza')) { x.classList.add('certeza'); x.textContent = 'Excluir mesmo?'; return; }
+        if (gravarLista(D.excluirRecebimento(lerLista(), detChave, i))) { desenharDetalhe(regAberto()); desenharHist(); avisar('Recebimento excluído'); }
+      });
+      li.appendChild(t); li.appendChild(x); box.appendChild(li);
+    });
+  }
+  /* Condição de pagamento: ao aprovar (modo 'aprovar') ou depois, pelo detalhe (modo 'mudar') */
+  var condModo = 'aprovar', condSel = 'entrega';
+  function valorTexto(n) { return String(Math.round(n * 100) / 100).replace('.', ','); }
+  function desenharCond(reg) {
+    Array.prototype.forEach.call($('cond-seg').querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.cond === condSel)); });
+    $('cond-entrada').hidden = condSel !== 'entrada';
+    $('cond-ajuda').textContent = condSel === 'entrega' ? 'O cliente paga tudo quando retirar ou receber.'
+      : condSel === 'entrada' ? 'Uma parte agora e o restante depois.' : 'Registra o valor total como recebido hoje.';
+    $('cond-ok').textContent = condModo === 'aprovar' ? 'Aprovar' : 'Salvar';
+    var v = C.lerNumero($('cond-valor').value);
+    Array.prototype.forEach.call($('cond-pcts').querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-pressed', String(Math.abs(D.entradaSugerida(reg.total * b.dataset.pct / 50) - v) < 0.005));
+    });
+  }
+  function abrirCond(reg, modo) {
+    condModo = modo;
+    var cond = reg.pagamento && reg.pagamento.condicao ? reg.pagamento.condicao : 'entrega';
+    condSel = modo === 'aprovar' ? 'entrega' : cond;
+    $('cond-titulo').textContent = modo === 'aprovar' ? 'Aprovar pedido' : 'Condição de pagamento';
+    $('cond-total').textContent = 'Total ' + moeda(reg.total);
+    var prev = reg.pagamento && reg.pagamento.entradaPrevista ? reg.pagamento.entradaPrevista : D.entradaSugerida(reg.total);
+    $('cond-valor').value = valorTexto(prev);
+    desenharCond(reg);
+    $('folha-cond').hidden = false;
+  }
+  function fecharCond() { $('folha-cond').hidden = true; }
+  $('cond-fechar').addEventListener('click', fecharCond);
+  $('cond-fundo').addEventListener('click', fecharCond);
+  Array.prototype.forEach.call($('cond-seg').querySelectorAll('button'), function (b) {
+    b.addEventListener('click', function () { condSel = b.dataset.cond; var reg = regAberto(); if (reg) desenharCond(reg); });
+  });
+  Array.prototype.forEach.call($('cond-pcts').querySelectorAll('button'), function (b) {
+    b.addEventListener('click', function () {
+      var reg = regAberto(); if (!reg) return;
+      $('cond-valor').value = valorTexto(Math.round(reg.total * b.dataset.pct) / 100);
+      desenharCond(reg);
+    });
+  });
+  $('cond-valor').addEventListener('input', function () { var reg = regAberto(); if (reg) desenharCond(reg); });
+  selecionarAoFocar($('cond-valor'));
+  $('cond-ok').addEventListener('click', function () {
+    var reg = regAberto(); if (!reg) return;
+    var c = { condicao: condSel };
+    if (condSel === 'entrada') {
+      var v = C.lerNumero($('cond-valor').value);
+      if (!(v > 0) || v > reg.total) { avisar('A entrada precisa ser maior que zero e até ' + moeda(reg.total)); return; }
+      c.entradaValor = v;
+    }
+    var agora = new Date(), lista = lerLista();
+    var nova = condModo === 'aprovar' ? D.aprovarComCondicao(lista, detChave, c, agora) : D.definirCondicao(lista, detChave, c, agora);
+    fecharCond();
+    if (gravarLista(nova)) { desenharDetalhe(regAberto()); desenharHist(); avisar(condModo === 'aprovar' ? 'Pedido aprovado' : 'Condição salva'); }
+  });
+  $('det-cond-mudar').addEventListener('click', function () { var reg = regAberto(); if (reg) { guardarEdicao(); abrirCond(reg, 'mudar'); } });
+  /* Registrar recebimento */
+  var recForma = 'pix';
+  function desenharForma() { Array.prototype.forEach.call($('rec-forma').querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.forma === recForma)); }); }
+  Array.prototype.forEach.call($('rec-forma').querySelectorAll('button'), function (b) { b.addEventListener('click', function () { recForma = b.dataset.forma; desenharForma(); }); });
+  function dataHojeISO() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function abrirRec() {
+    var reg = regAberto(); if (!reg) return;
+    guardarEdicao();
+    var pg = D.situacaoPagamento(reg), sug = pg.falta;
+    var prev = reg.pagamento && reg.pagamento.condicao === 'entrada' ? reg.pagamento.entradaPrevista || 0 : 0;
+    if (prev > pg.recebido + 0.004) sug = Math.round((prev - pg.recebido) * 100) / 100;
+    $('rec-info').textContent = pg.texto + ' · total ' + moeda(pg.total);
+    $('rec-valor').value = sug > 0 ? valorTexto(sug) : '';
+    $('rec-data').value = dataHojeISO(); recForma = 'pix'; desenharForma();
+    $('folha-rec').hidden = false;
+  }
+  function fecharRec() { $('folha-rec').hidden = true; }
+  $('det-rec-novo').addEventListener('click', abrirRec);
+  $('rec-fechar').addEventListener('click', fecharRec);
+  $('rec-fundo').addEventListener('click', fecharRec);
+  selecionarAoFocar($('rec-valor'));
+  $('rec-ok').addEventListener('click', function () {
+    var v = C.lerNumero($('rec-valor').value);
+    if (!(v > 0)) { avisar('Digite o valor recebido'); return; }
+    var dt = $('rec-data').value ? new Date($('rec-data').value + 'T12:00:00') : new Date();
+    if (isNaN(dt.getTime())) dt = new Date();
+    var nova = D.registrarRecebimento(lerLista(), detChave, { valor: v, em: dt, forma: recForma });
+    fecharRec();
+    if (gravarLista(nova)) { desenharDetalhe(regAberto()); desenharHist(); avisar('Recebimento registrado'); }
+  });
   /* Etapa (de Aprovado em diante): um botão com a próxima etapa e, em "Mais opções", pular, voltar uma etapa e cancelar */
   function desenharEtapa(reg, hoje) {
     var st = reg.status, pill = $('det-etapa-pill');
@@ -1139,16 +1264,24 @@
   function pedirCancelar(reg) {
     $('cancelar-txt').textContent = reg.status === 'pedido' ? 'O pedido fica na lista como Cancelado, para você consultar depois.'
       : 'O pedido fica na lista como Cancelado e deixa de contar nas vendas. Você pode reabrir se mudar de ideia.';
+    var rec = D.situacaoPagamento(reg).recebido;
+    $('cancelar-devolvi').hidden = !(rec > 0);
+    if (rec > 0) {
+      $('cancelar-txt').textContent = 'O pedido fica como Cancelado. Os ' + moeda(rec) + ' já recebidos: ficaram com você ou você devolveu ao cliente?';
+      $('cancelar-sim').textContent = 'Ficou com você';
+    } else { $('cancelar-sim').textContent = 'Cancelar pedido'; }
     $('folha-cancelar').hidden = false;
   }
   function fecharCancelar() { $('folha-cancelar').hidden = true; }
   $('cancelar-nao').addEventListener('click', fecharCancelar);
   $('cancelar-fundo').addEventListener('click', fecharCancelar);
-  $('cancelar-sim').addEventListener('click', function () {
+  function confirmarCancelar(devolveu) {
     fecharCancelar();
     if (!detChave) return;
-    if (gravarLista(D.cancelarPedido(lerLista(), detChave, false, new Date()))) { desenharDetalhe(regAberto()); desenharHist(); avisar('Pedido cancelado'); }
-  });
+    if (gravarLista(D.cancelarPedido(lerLista(), detChave, devolveu, new Date()))) { desenharDetalhe(regAberto()); desenharHist(); avisar('Pedido cancelado'); }
+  }
+  $('cancelar-sim').addEventListener('click', function () { confirmarCancelar(false); });
+  $('cancelar-devolvi').addEventListener('click', function () { confirmarCancelar(true); });
   $('det-ped-cancelar').addEventListener('click', function () { var reg = regAberto(); if (reg) { guardarEdicao(); pedirCancelar(reg); } });
 
   /* Orçar este pedido: abre o Novo orçamento só com a quantidade preenchida (o resto da mesa é zerado para não misturar com outro orçamento) */
@@ -1197,7 +1330,7 @@
   });
   document.addEventListener('keydown', function (ev) {
     if (ev.key !== 'Escape') return;
-    if (!$('folha-cancelar').hidden) fecharCancelar(); else if (!$('folha-pedido').hidden) fecharPedido();
+    if (!$('folha-cond').hidden) fecharCond(); else if (!$('folha-rec').hidden) fecharRec(); else if (!$('folha-cancelar').hidden) fecharCancelar(); else if (!$('folha-pedido').hidden) fecharPedido();
   });
   function abrirDetalhe(reg) {
     detChave = D.chaveRegistro(reg);
@@ -1213,7 +1346,7 @@
     desenharHist();
   }
   function fecharDetalhe() { guardarEdicao(); folhaDet.hidden = true; detChave = null; }
-  function fecharSheetsHist() { folhaDet.hidden = true; folhaExcluir.hidden = true; $('folha-cancelar').hidden = true; $('folha-pedido').hidden = true; detChave = null; }
+  function fecharSheetsHist() { folhaDet.hidden = true; folhaExcluir.hidden = true; $('folha-cancelar').hidden = true; $('folha-pedido').hidden = true; $('folha-cond').hidden = true; $('folha-rec').hidden = true; detChave = null; }
   $('det-fechar').addEventListener('click', fecharDetalhe);
   $('det-fundo').addEventListener('click', fecharDetalhe);
   ['det-cliente', 'det-peca'].forEach(function (id) { $(id).addEventListener('change', guardarEdicao); selecionarAoFocar($(id)); });
@@ -1222,6 +1355,7 @@
       var reg = regAberto();
       if (!reg || reg.status === b.dataset.st) return;
       guardarEdicao();
+      if (b.dataset.st === 'aprovado') { abrirCond(reg, 'aprovar'); return; }
       if (gravarLista(D.atualizarRegistro(lerLista(), detChave, { status: b.dataset.st }))) { desenharDetalhe(regAberto()); desenharHist(); }
     });
   });

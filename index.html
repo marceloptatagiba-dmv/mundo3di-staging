@@ -428,6 +428,19 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
 .selo-pedido{align-items:center}
 .selo-pedido button{width:28px;height:28px;border:0;background:#E3EEFB;color:#1F4E8C;border-radius:50%;font-size:16px;font-weight:800;line-height:1;padding:0;flex-shrink:0}
 .selo-pedido span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1F4E8C;font-weight:700}
+.pills{display:flex;gap:4px;justify-content:flex-end;align-items:center}
+.pill-pag{display:inline-flex;align-items:center;height:22px;padding:0 8px 0 6px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;background:#fff;color:#8A4B04;box-shadow:inset 0 0 0 1.5px #C27A0E}
+.pill-pag::before{content:"$";display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;margin-right:4px;border:1.5px solid currentColor;border-radius:50%;font-size:8px;font-weight:800;line-height:1}
+.pill-pag.pago{color:#2F6402;box-shadow:inset 0 0 0 1.5px #3D8203}
+.pill-pag[hidden]{display:none}
+.chip.pag[aria-pressed="false"]{border-color:#C27A0E;color:#8A4B04}
+.chip.pag[data-pag="pago"][aria-pressed="false"]{border-color:#3D8203;color:#2F6402}
+.recs{display:flex;flex-direction:column;gap:4px}
+.rec-linha{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;min-height:32px}
+.rec-linha span{flex:1;min-width:0}
+.rec-linha .neg{color:#8F2F08}
+.rec-linha button{height:32px;padding:0 10px;border:1.5px solid var(--borda);border-radius:10px;background:#fff;font-size:12px;font-weight:700;color:var(--suave)}
+.rec-linha button.certeza{border-color:#E9C9B8;color:#A3360A}
 </style>
 </head>
 <body>
@@ -787,7 +800,7 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
           <button class="chip" type="button" data-per="tudo" aria-pressed="false">Tudo</button>
         </div>
         <!-- Etapa: toque para filtrar, toque de novo para mostrar todos. Pedido, Orçado, Vencido, Produção, Embalagem e Pronto são filas (sem período). -->
-        <div class="chips sit" id="hist-sit" role="group" aria-label="Etapa">
+        <div class="chips sit" id="hist-sit" role="group" aria-label="Etapa e pagamento">
           <button class="chip" type="button" data-sit="pedido" aria-pressed="false">Pedido</button>
           <button class="chip" type="button" data-sit="enviado" aria-pressed="false">Orçado</button>
           <button class="chip" type="button" data-sit="vencido" aria-pressed="false">Vencido</button>
@@ -798,6 +811,9 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
           <button class="chip" type="button" data-sit="entregue" aria-pressed="false">Entregue</button>
           <button class="chip" type="button" data-sit="recusado" aria-pressed="false">Recusado</button>
           <button class="chip" type="button" data-sit="cancelado" aria-pressed="false">Cancelado</button>
+          <button class="chip pag" type="button" data-pag="pendente" aria-pressed="false">Pendente</button>
+          <button class="chip pag" type="button" data-pag="parcial" aria-pressed="false">Parcial</button>
+          <button class="chip pag" type="button" data-pag="pago" aria-pressed="false">Pago</button>
         </div>
         <p class="resumo-sit" id="hist-sit-resumo" aria-live="polite" hidden></p>
         <section class="resumo" id="hist-resumo" aria-live="polite" aria-label="Resumo do período">
@@ -1022,6 +1038,15 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
       <button class="btn mais peq" type="button" id="det-mais-op" aria-expanded="false">Mais opções</button>
       <div class="opcoes-etapa" id="det-opcoes" hidden></div>
     </div>
+    <div class="campo" id="det-bloco-pag" hidden><span>Pagamento</span>
+      <div class="linha-etapa"><span class="pill-pag" id="det-pag-pill"></span><span class="ajuda neutra" id="det-pag-info"></span></div>
+      <span class="ajuda neutra" id="det-pag-cond"></span>
+      <div class="recs" id="det-recs"></div>
+      <div class="grade2" id="det-pag-acoes">
+        <button class="btn peq" type="button" id="det-rec-novo">Registrar recebimento</button>
+        <button class="btn mais peq" type="button" id="det-cond-mudar">Mudar condição</button>
+      </div>
+    </div>
     <div class="campo" id="det-bloco-pedido" hidden>
       <button class="btn principal" type="button" id="det-orcar">Orçar este pedido</button>
       <button class="btn mais peq perigo" type="button" id="det-ped-cancelar">Cancelar pedido</button>
@@ -1062,6 +1087,57 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
   </div>
 </div>
 
+<!-- PAINEL: CONDIÇÃO DE PAGAMENTO (ao aprovar ou ao mudar) -->
+<div class="folha" id="folha-cond" hidden>
+  <div class="folha-fundo" id="cond-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="cond-titulo" style="gap:10px">
+    <div class="folha-topo"><strong id="cond-titulo">Aprovar pedido</strong>
+      <button class="fechar" type="button" id="cond-fechar" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <p class="ajuda neutra" id="cond-total"></p>
+    <div class="campo"><span>Como o cliente vai pagar</span>
+      <div class="seg" id="cond-seg" role="group" aria-label="Condição de pagamento">
+        <button type="button" data-cond="entrega" aria-pressed="true">Na entrega</button>
+        <button type="button" data-cond="entrada" aria-pressed="false">Entrada</button>
+        <button type="button" data-cond="pago" aria-pressed="false">Já pago</button>
+      </div>
+      <span class="ajuda neutra" id="cond-ajuda"></span>
+    </div>
+    <div class="campo" id="cond-entrada" hidden><span>Valor da entrada</span>
+      <div class="chips" id="cond-pcts">
+        <button class="chip" type="button" data-pct="30" aria-pressed="false">30%</button>
+        <button class="chip" type="button" data-pct="50" aria-pressed="false">50%</button>
+        <button class="chip" type="button" data-pct="70" aria-pressed="false">70%</button>
+      </div>
+      <span class="caixa"><b>R$</b><input id="cond-valor" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00"></span>
+    </div>
+    <button class="btn principal" type="button" id="cond-ok">Aprovar</button>
+  </div>
+</div>
+
+<!-- PAINEL: REGISTRAR RECEBIMENTO -->
+<div class="folha" id="folha-rec" hidden>
+  <div class="folha-fundo" id="rec-fundo"></div>
+  <div class="folha-corpo" role="dialog" aria-modal="true" aria-labelledby="rec-titulo" style="gap:10px">
+    <div class="folha-topo"><strong id="rec-titulo">Registrar recebimento</strong>
+      <button class="fechar" type="button" id="rec-fechar" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <p class="ajuda neutra" id="rec-info"></p>
+    <div class="grade2">
+      <label class="campo"><span>Valor</span><span class="caixa"><b>R$</b><input id="rec-valor" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00"></span></label>
+      <label class="campo"><span>Data</span><span class="caixa texto"><input id="rec-data" type="date"></span></label>
+    </div>
+    <div class="campo"><span>Forma</span>
+      <div class="chips clientes" id="rec-forma" role="group" aria-label="Forma de pagamento">
+        <button class="chip claro" type="button" data-forma="pix" aria-pressed="true">Pix</button>
+        <button class="chip claro" type="button" data-forma="dinheiro" aria-pressed="false">Dinheiro</button>
+        <button class="chip claro" type="button" data-forma="cartao" aria-pressed="false">Cartão</button>
+        <button class="chip claro" type="button" data-forma="transferencia" aria-pressed="false">Transferência</button>
+        <button class="chip claro" type="button" data-forma="outro" aria-pressed="false">Outro</button>
+      </div>
+    </div>
+    <button class="btn principal" type="button" id="rec-ok">Salvar recebimento</button>
+  </div>
+</div>
+
 <!-- PAINEL: CANCELAR PEDIDO -->
 <div class="folha" id="folha-cancelar" hidden>
   <div class="folha-fundo" id="cancelar-fundo"></div>
@@ -1069,6 +1145,7 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
     <div class="folha-topo"><strong id="cancelar-titulo">Cancelar este pedido?</strong></div>
     <p class="ajuda" id="cancelar-txt"></p>
     <button class="btn principal" type="button" id="cancelar-sim" style="background:#A3360A">Cancelar pedido</button>
+    <button class="btn principal" type="button" id="cancelar-devolvi" hidden>Devolvi o valor</button>
     <button class="btn" type="button" id="cancelar-nao">Voltar</button>
   </div>
 </div>
