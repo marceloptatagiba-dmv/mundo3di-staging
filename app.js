@@ -1309,17 +1309,17 @@
   Array.prototype.forEach.call($('ped-canal').querySelectorAll('button'), function (b) {
     b.addEventListener('click', function () { pedCanal = pedCanal === b.dataset.canal ? '' : b.dataset.canal; desenharCanalPedido(); });
   });
-  function abrirPedido() {
+  function abrirAnotarPedido() {
     var lim = D.estadoLimite(lerLista());
     if (lim.cheio) { avisar(lim.texto); return; }
     $('ped-cliente').value = ''; $('ped-texto').value = ''; $('ped-qtd').value = '1'; $('ped-prazo').value = ''; pedCanal = ''; desenharCanalPedido();
     $('folha-pedido').hidden = false;
     $('ped-texto').focus();
   }
-  function fecharPedido() { $('folha-pedido').hidden = true; }
-  $('ped-novo').addEventListener('click', abrirPedido);
-  $('ped-fechar').addEventListener('click', fecharPedido);
-  $('ped-fundo').addEventListener('click', fecharPedido);
+  function fecharAnotarPedido() { $('folha-pedido').hidden = true; }
+  $('ped-novo').addEventListener('click', abrirAnotarPedido);
+  $('ped-fechar').addEventListener('click', fecharAnotarPedido);
+  $('ped-fundo').addEventListener('click', fecharAnotarPedido);
   selecionarAoFocar($('ped-qtd'));
   $('ped-salvar').addEventListener('click', function () {
     var cliente = D.limparTexto($('ped-cliente').value, 60), texto = D.limparTexto($('ped-texto').value, D.MAX_TEXTO_PEDIDO);
@@ -1328,14 +1328,14 @@
     if (lim.cheio) { avisar(lim.texto); return; }
     var reg = D.novoPedido({ cliente: cliente, texto: texto, qtd: C.lerQuantidade($('ped-qtd').value), prazoDesejado: $('ped-prazo').value, canal: pedCanal }, new Date());
     if (!gravarLista(D.adicionarRegistro(lista, reg, D.MAX_REGISTROS))) return;
-    fecharPedido();
+    fecharAnotarPedido();
     histSituacao = ''; histBusca = ''; $('hist-busca').value = ''; histLimite = 50;
     desenharHist();
     avisar('Pedido anotado');
   });
   document.addEventListener('keydown', function (ev) {
     if (ev.key !== 'Escape') return;
-    if (!$('folha-cond').hidden) fecharCond(); else if (!$('folha-rec').hidden) fecharRec(); else if (!$('folha-cancelar').hidden) fecharCancelar(); else if (!$('folha-pedido').hidden) fecharPedido();
+    if (!$('folha-cond').hidden) fecharCond(); else if (!$('folha-rec').hidden) fecharRec(); else if (!$('folha-cancelar').hidden) fecharCancelar(); else if (!$('folha-pedido').hidden) fecharAnotarPedido();
   });
   function abrirDetalhe(reg) {
     detChave = D.chaveRegistro(reg);
@@ -1924,7 +1924,7 @@
   var ultimaEntrada = null;
   function fecharPainelAberto() {
     var ordem = [['folha-cond', fecharCond], ['folha-rec', fecharRec], ['folha-cobrar', fecharCobrar], ['folha-cancelar', fecharCancelar], ['folha-excluir', function () { $('folha-excluir').hidden = true; }],
-      ['folha-pedido', fecharPedido], ['folha-det', fecharDetalhe], ['folha', fecharFolha], ['folha-sair-cfg', fecharSairCfg], ['folha-cat-salvar', fecharPaineisCat], ['folha-cat-pedido', fecharPaineisCat], ['folha-cat-editar', fecharPaineisCat],
+      ['folha-pedido', fecharAnotarPedido], ['folha-det', fecharDetalhe], ['folha', fecharFolha], ['folha-sair-cfg', fecharSairCfg], ['folha-cat-salvar', fecharPaineisCat], ['folha-cat-pedido', fecharPaineisCat], ['folha-cat-editar', fecharPaineisCat],
       ['folha-restaurar', fecharPaineisBackup], ['folha-desfazer', fecharPaineisBackup]];
     for (var i = 0; i < ordem.length; i++) if (!$(ordem[i][0]).hidden) { ordem[i][1](); if (ordem[i][0] === 'folha-cond' || ordem[i][0] === 'folha-rec') soltarChave(); return true; }
     return false;
