@@ -718,11 +718,12 @@
     igual('situação enviado: aguardando resposta, sem período, do mais antigo para o mais novo', idsSit({ situacao: 'enviado' }), '80,60,61,62,63,64,65,66,67');
     igual('situação enviado ignora o período escolhido', idsSit({ situacao: 'enviado', periodo: 'hoje' }), '80,60,61,62,63,64,65,66,67');
     igual('situação vencido: validade já passou, do mais antigo para o mais novo', idsSit({ situacao: 'vencido' }), '71,70,72');
-    igual('situação aprovado (30 dias): pela data da aprovação, do mais novo para o mais antigo', idsSit({ situacao: 'aprovado', periodo: '30' }), '50,49,48,47,46,45,44,43,42,41,40');
-    igual('situação aprovado: enviado há 40 dias e aprovado ontem entra em 7 dias', ids(D.filtrarRegistros([pvVenda(130, 40, 1, 100, 50, '', '')], { situacao: 'aprovado', periodo: '7', hoje: hojeH })) + '|' + ids(D.filtrarRegistros([pvVenda(130, 3, 20, 100, 50, '', '')], { situacao: 'aprovado', periodo: '7', hoje: hojeH })), '130|');
-    igual('situação aprovado em Hoje: nenhum', idsSit({ situacao: 'aprovado', periodo: 'hoje' }), '');
+    // desde o 0.6.0-teste.12 Aprovado é fila de trabalho (espera produção): sem período, do mais antigo para o mais novo
+    igual('situação aprovado: fila, sem período, do mais antigo para o mais novo', idsSit({ situacao: 'aprovado', periodo: '30' }), '19,20,21,40,41,42,43,44,45,46,47,48,49,50');
+    igual('situação aprovado ignora o período escolhido (Hoje mostra os mesmos)', idsSit({ situacao: 'aprovado', periodo: 'hoje' }), idsSit({ situacao: 'aprovado', periodo: '30' }));
+    igual('situação aprovado: aprovado há 20 dias também aparece com 7 dias', ids(D.filtrarRegistros([pvVenda(130, 40, 1, 100, 50, '', '')], { situacao: 'aprovado', periodo: '7', hoje: hojeH })) + '|' + ids(D.filtrarRegistros([pvVenda(130, 3, 20, 100, 50, '', '')], { situacao: 'aprovado', periodo: '7', hoje: hojeH })), '130|130');
     igual('situação recusado (7 dias)', idsSit({ situacao: 'recusado', periodo: '7' }), '74,73');
-    igual('situação combina com a busca', idsSit({ situacao: 'aprovado', periodo: 'tudo', busca: 'ANA' }), '50,46,42,20');
+    igual('situação combina com a busca', idsSit({ situacao: 'aprovado', periodo: 'tudo', busca: 'ANA' }), '20,42,46,50');
     igual('situação desconhecida ou vazia não filtra', idsSit({ situacao: 'lixo', periodo: 'tudo' }) === idsSit({ periodo: 'tudo' }), true);
     igual('sem situação a ordem continua do mais novo para o mais antigo', idsSit({ periodo: 'hoje' }).split(',')[0], '67');
     var pvCont = D.contarSituacoes(pvTodos, hojeH);
@@ -962,6 +963,23 @@
     igual('planilha v6: venda em produção com entrada paga', v6Csv[1].split(';').slice(12).join(';'), 'Produção;0;Produção;12/11/2026;12/11/2026;Entrada + restante;93,00;93,00');
     igual('planilha v6: orçado sem pagamento e mesmo número de colunas em todas as linhas', v6Csv[3].split(';').slice(12).join(';') + '|' + v6Csv.slice(0, 4).map(function (l) { return l.split(';').length; }).join(','), 'Orçado;0;Orçado;;;;;|20,20,20,20');
 
+
+    // 0.6.0-teste.12: orçamento registrado sem enviar (informado pessoalmente, por telefone ou outro meio)
+    var seReg = D.novoRegistro(r1, { numero: 95, formato: 'sem-envio', informado: 'telefone', quando: em(0, 8, 20), cliente: 'Diana', validadeAte: '2026-11-25' });
+    igual('sem envio: formato, informado, etapa Orçado e validade', [seReg.formato, seReg.informado, seReg.status, seReg.validadeAte, seReg.total === Math.round(r1.valorCobrar * 100) / 100].join('|'), 'sem-envio|telefone|enviado|2026-11-25|true');
+    igual('sem envio: "informado" inválido sai; em texto/imagem não é gravado', ['informado' in D.novoRegistro(r1, { numero: 1, formato: 'sem-envio', informado: 'fax' }), 'informado' in D.novoRegistro(r1, { numero: 1, formato: 'texto', informado: 'telefone' }), D.novoRegistro(r1, { numero: 1, formato: 'sem-envio' }).formato].join('|'), 'false|false|sem-envio');
+    var seLido = D.lerRegistro(JSON.parse(JSON.stringify(seReg)));
+    igual('sem envio: lido de volta (backup) mantém formato e informado', seLido.formato + '|' + seLido.informado, 'sem-envio|telefone');
+    igual('sem envio: descrição no detalhe', [D.descreverEnvio(seReg, hojeH), D.descreverEnvio(Object.assign({}, seReg, { informado: 'presencial' }), hojeH), D.descreverEnvio(Object.assign({}, seReg, { informado: 'outro' }), hojeH), D.descreverEnvio(D.novoRegistro(r1, { numero: 2, formato: 'sem-envio', quando: em(1, 9) }), hojeH)].join(' / '),
+      'Registrado hoje às 08:20 · informado por telefone / Registrado hoje às 08:20 · informado pessoalmente / Registrado hoje às 08:20 · informado por outro meio / Registrado ontem às 09:00 · sem envio');
+    igual('sem envio: rótulo curto na lista', [D.rotuloFormato(seReg), D.rotuloFormato(Object.assign({}, seReg, { informado: 'presencial' })), D.rotuloFormato(D.novoRegistro(r1, { numero: 2, formato: 'sem-envio' })), D.rotuloFormato(regNovo), D.rotuloFormato(mkReg(3, 0))].join('|'), 'Telefone|Pessoalmente|Sem envio|Imagem|Texto');
+    var seEnv = D.atualizarRegistro([seReg], D.chaveRegistro(seReg), { formato: 'imagem' })[0];
+    igual('sem envio: enviar depois troca o formato, apaga "informado" e mantém Nº e data', [seEnv.formato, 'informado' in seEnv, seEnv.n, seEnv.ts === seReg.ts, D.atualizarRegistro([seReg], D.chaveRegistro(seReg), { formato: 'lixo' })[0].formato].join('|'), 'imagem|false|95|true|sem-envio');
+    igual('sem envio: aparece como Orçado na fila e vence pela validade', [D.filtrarRegistros([seReg], { situacao: 'enviado', hoje: hojeH }).length, D.situacao(seReg, new Date(2026, 10, 26))].join('|'), '1|vencido');
+    var seOrc = D.orcarPedido([v6Ped], D.chaveRegistro(v6Ped), r1, { numero: 96, formato: 'sem-envio', informado: 'presencial', quando: em(0, 10) });
+    igual('sem envio: orçar um pedido anotado sem enviar (mesmo registro, mantém o canal do pedido)', [seOrc.vinculado, seOrc.lista.length, seOrc.lista[0].formato, seOrc.lista[0].informado, seOrc.lista[0].canal, seOrc.lista[0].n].join('|'), 'true|1|sem-envio|presencial|whatsapp|96');
+    var seCsv = D.gerarCSV([seReg], hojeH).split('\r\n');
+    igual('sem envio: planilha mostra "Sem envio (telefone)" na coluna Formato', seCsv[1].split(';')[3], 'Sem envio (telefone)');
     return resultados;
   }
 

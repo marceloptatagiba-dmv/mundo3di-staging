@@ -9,8 +9,12 @@
   var SITUACOES_FILTRO = ['pedido', 'enviado', 'vencido', 'aprovado', 'producao', 'embalagem', 'pronto', 'entregue', 'recusado', 'cancelado'];   // chips da lista (vencido é calculado)
   var ETAPAS_VENDA = ['aprovado', 'producao', 'embalagem', 'pronto', 'entregue'];   // contam como venda (pela data fixa aprovadoEm)
   var ETAPAS_ABERTAS = ['pedido', 'enviado', 'aprovado', 'producao', 'embalagem', 'pronto'];   // ainda não encerradas
-  var ESPERA_FILTRO = ['pedido', 'enviado', 'vencido', 'producao', 'embalagem', 'pronto'];   // filas de trabalho: ignoram o período
+  var ESPERA_FILTRO = ['pedido', 'enviado', 'vencido', 'aprovado', 'producao', 'embalagem', 'pronto'];   // filas de trabalho: ignoram o período (Aprovado desde o 0.6.0-teste.12: espera produção)
   var CANAIS = ['whatsapp', 'instagram', 'presencial', 'outro'];
+  /* Formato do orçamento: texto ou imagem (enviados pelo celular) ou sem-envio (registrado sem enviar: informado pessoalmente, por telefone ou outro meio). */
+  var FORMATOS = ['texto', 'imagem', 'sem-envio'];
+  var INFORMADO = ['presencial', 'telefone', 'outro'];
+  var ROTULOS_INFORMADO = { presencial: 'Pessoalmente', telefone: 'Telefone', outro: 'Outro meio' };
   var CONDICOES = ['entrega', 'entrada', 'pago'];
   var FORMAS_PAGAMENTO = ['pix', 'dinheiro', 'cartao', 'transferencia', 'outro'];
   var ROTULOS_PAGAMENTO = { pendente: 'Pendente', parcial: 'Parcial', pago: 'Pago' };
@@ -122,7 +126,7 @@
     var reg = {
       n: o.numero,
       ts: (o.quando instanceof Date ? o.quando : new Date()).toISOString(),
-      formato: o.formato === 'imagem' ? 'imagem' : 'texto',
+      formato: FORMATOS.indexOf(o.formato) !== -1 ? o.formato : 'texto',
       qtd: r.qtd, valorPeca: c2(r.valorUnitario), total: c2(r.valorCobrar), custoTotal: c2(r.custoTotal), lucro: c2(r.lucro),
       material: limparTexto(o.material, 60), cliente: limparTexto(o.cliente, 60), descricao: limparTexto(o.descricao, 120),
       status: 'enviado', reenvios: 0
@@ -133,6 +137,7 @@
     if (validoISO(o.validadeAte)) reg.validadeAte = o.validadeAte;
     if (o.catalogoId) reg.catalogoId = limparTexto(o.catalogoId, 40);
     if (o.versaoApp) reg.versaoApp = limparTexto(o.versaoApp, 24);
+    if (reg.formato === 'sem-envio' && INFORMADO.indexOf(o.informado) !== -1) reg.informado = o.informado;
     reg.historico = [{ etapa: 'enviado', em: reg.ts }];
     return reg;
   }
@@ -151,7 +156,7 @@
     var n = Number(x.n);
     if (!isFinite(n) || n < 0) return null;
     var r = {
-      n: Math.floor(n), ts: x.ts, formato: x.formato === 'imagem' ? 'imagem' : 'texto',
+      n: Math.floor(n), ts: x.ts, formato: FORMATOS.indexOf(x.formato) !== -1 ? x.formato : 'texto',
       qtd: Math.max(1, Math.floor(n0(x.qtd)) || 1), valorPeca: n0(x.valorPeca), total: n0(x.total), custoTotal: n0(x.custoTotal),
       lucro: typeof x.lucro === 'number' && isFinite(x.lucro) ? x.lucro : 0,
       material: limparTexto(x.material, 60), cliente: limparTexto(x.cliente, 60), descricao: limparTexto(x.descricao, 120),
@@ -168,6 +173,7 @@
     // v6: etapas, pedido, pagamento e cobrança (todos opcionais; registro antigo continua válido)
     if (dataValida(x.criadoEm)) r.criadoEm = x.criadoEm;
     if (CANAIS.indexOf(x.canal) !== -1) r.canal = x.canal;
+    if (r.formato === 'sem-envio' && INFORMADO.indexOf(x.informado) !== -1) r.informado = x.informado;
     if (validoISO(x.prazoDesejado)) r.prazoDesejado = x.prazoDesejado;
     if (x.pedidoTexto) r.pedidoTexto = limparTexto(x.pedidoTexto, MAX_TEXTO_PEDIDO);
     if (dataValida(x.aprovadoEm)) r.aprovadoEm = x.aprovadoEm;
@@ -219,6 +225,7 @@
       if (m.prazo !== undefined) { if (m.prazo) x.prazo = limparTexto(m.prazo, 40); else delete x.prazo; }
       if (m.validadeAte !== undefined && validoISO(m.validadeAte)) x.validadeAte = m.validadeAte;
       if (m.reenvios !== undefined) x.reenvios = Math.floor(n0(m.reenvios));
+      if (m.formato !== undefined && FORMATOS.indexOf(m.formato) !== -1) { x.formato = m.formato; if (m.formato !== 'sem-envio') delete x.informado; }
       if (m.status !== undefined && SITUACOES.indexOf(m.status) !== -1) {
         x = aplicarEtapa(x, m.status, dataValida(m.statusEm) ? m.statusEm : new Date().toISOString());   // grava historico e aprovadoEm (v6)
       }
@@ -268,9 +275,9 @@
    * f: { periodo (padrão '30'), situacao (uma de SITUACOES_FILTRO; vazio = todas), pagamento ('pendente' | 'parcial' | 'pago'), busca, hoje (Date),
    *      venceEm ('AAAA-MM-DD': orçamentos que vencem nesse dia), prazoVencido (true: prazo desejado passado e ainda não entregue) }
    * Com situação:
-   *  - pedido, enviado, vencido, produção, embalagem e pronto (as filas de trabalho) ignoram o período e saem do mais antigo para o mais novo;
+   *  - pedido, enviado, vencido, aprovado, produção, embalagem e pronto (as filas de trabalho) ignoram o período e saem do mais antigo para o mais novo;
    *  - o filtro de pagamento sozinho também é fila (quem ainda deve), sem período;
-   *  - aprovado, entregue, recusado e cancelado usam a data da venda/resposta (a mesma regra do painel de vendas), mas a lista continua mostrando a hora do envio.
+   *  - entregue, recusado e cancelado usam a data da venda/resposta (a mesma regra do painel de vendas), mas a lista continua mostrando a hora do envio.
    */
   function filtrarRegistros(regs, f) {
     f = f || {};
@@ -469,7 +476,18 @@
     var d = new Date(reg.ts), h0 = inicioDoDia(hoje || new Date());
     var dif = Math.round((h0.getTime() - inicioDoDia(d).getTime()) / 86400000);
     var quando = dif === 0 ? 'hoje' : dif === 1 ? 'ontem' : 'em ' + dataBR(d);
+    if (reg.formato === 'sem-envio') {
+      var como = reg.informado === 'presencial' ? ' · informado pessoalmente' : reg.informado === 'telefone' ? ' · informado por telefone' : reg.informado === 'outro' ? ' · informado por outro meio' : ' · sem envio';
+      return 'Registrado ' + quando + ' às ' + hora(reg.ts) + como;
+    }
     return 'Enviado ' + quando + ' às ' + hora(reg.ts) + ' como ' + (reg.formato === 'imagem' ? 'imagem' : 'texto');
+  }
+  /* Rótulo curto do formato na lista: 'Texto' · 'Imagem' · 'Pessoalmente' · 'Telefone' · 'Outro meio' · 'Sem envio' */
+  function rotuloFormato(reg) {
+    if (!reg) return '';
+    if (reg.formato === 'imagem') return 'Imagem';
+    if (reg.formato === 'sem-envio') return ROTULOS_INFORMADO[reg.informado] || 'Sem envio';
+    return 'Texto';
   }
   /* '2026-11-21' -> '21/11' (mesmo ano) ou '21/11/2027' */
   function validadeCurta(iso, hoje) {
@@ -704,7 +722,7 @@
       var texto = { 4: true, 5: true, 6: true };     // cliente, peça e material: textos digitados pela pessoa
       var pg = situacaoPagamento(r), temPg = !!pg.estado || somaRecebida(r) !== 0;
       linhas.push([
-        r.n > 0 ? numero4(r.n) : 'Pedido', dataBR(d), hora(r.ts), r.formato === 'imagem' ? 'Imagem' : 'Texto',
+        r.n > 0 ? numero4(r.n) : 'Pedido', dataBR(d), hora(r.ts), r.formato === 'sem-envio' ? 'Sem envio' + (r.informado ? ' (' + ROTULOS_INFORMADO[r.informado].toLowerCase() + ')' : '') : r.formato === 'imagem' ? 'Imagem' : 'Texto',
         r.cliente, r.descricao, materialDoRegistro(r), r.qtd,
         decimalBR(r.valorPeca), decimalBR(r.total), decimalBR(r.custoTotal), decimalBR(r.lucro),
         ROTULOS_ETAPA[situacao(r, hoje)], r.reenvios || 0,
@@ -1260,7 +1278,7 @@
     situacao: situacao, normalizarBusca: normalizarBusca, filtrarRegistros: filtrarRegistros, resumir: resumir,
     SITUACOES_FILTRO: SITUACOES_FILTRO, contarSituacoes: contarSituacoes, textoEspera: textoEspera,
     DIAS_ANTIGO: DIAS_ANTIGO, MAX_TOP: MAX_TOP, resumoVendas: resumoVendas, aprovadosDoPeriodo: aprovadosDoPeriodo, periodoAnterior: periodoAnterior, dataDaVenda: dataDaVenda,
-    agruparPorDia: agruparPorDia, hora: hora, descreverEnvio: descreverEnvio, validadeCurta: validadeCurta,
+    agruparPorDia: agruparPorDia, hora: hora, descreverEnvio: descreverEnvio, rotuloFormato: rotuloFormato, FORMATOS: FORMATOS, INFORMADO: INFORMADO, ROTULOS_INFORMADO: ROTULOS_INFORMADO, validadeCurta: validadeCurta,
     ultimosClientes: ultimosClientes, materialDoRegistro: materialDoRegistro, materialParaEnvio: materialParaEnvio,
     descricaoLinha: descricaoLinha, orcamentoDeRegistro: orcamentoDeRegistro, precisaLembreteBackup: precisaLembreteBackup,
     BACKUP_APP: BACKUP_APP, BACKUP_FORMATO: BACKUP_FORMATO, MAX_ARQUIVO_BACKUP: MAX_ARQUIVO_BACKUP, ERROS_BACKUP: ERROS_BACKUP, COLUNAS_CSV: COLUNAS_CSV,

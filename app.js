@@ -318,12 +318,14 @@
   function registrarEnvio(numero, formato, extra) {
     var opcoes = { numero: numero, formato: formato, material: extra.material, cliente: extra.cliente,
       descricao: extra.descricao, entrada: extra.entrada, prazo: extra.prazo, validadeAte: extra.validadeAte, versaoApp: versaoEmUso,
-      catalogoId: pecaVinculada() ? vinculo.id : '' };
-    var reg = D.novoRegistro(extra.orcamento, opcoes);
+      catalogoId: pecaVinculada() ? vinculo.id : '', informado: extra.informado };
+    var reg = D.novoRegistro(extra.orcamento, opcoes), chave = D.chaveRegistro(reg);
     try {
       localStorage.setItem(CHAVE_CONT, String(numero));
       if (pedidoVinculo) {   // pedido anotado antes: o MESMO registro passa a Orçado (ganha Nº, data e valores)
-        localStorage.setItem(CHAVE_REG, JSON.stringify(D.orcarPedido(lerLista(), pedidoVinculo.chave, extra.orcamento, opcoes).lista));
+        var orcado = D.orcarPedido(lerLista(), pedidoVinculo.chave, extra.orcamento, opcoes);
+        localStorage.setItem(CHAVE_REG, JSON.stringify(orcado.lista));
+        chave = orcado.chave;
       } else {
         var lista = JSON.parse(localStorage.getItem(CHAVE_REG) || '[]');
         localStorage.setItem(CHAVE_REG, JSON.stringify(D.adicionarRegistro(lista, reg, D.MAX_REGISTROS)));
@@ -332,11 +334,13 @@
     if (pedidoVinculo) { pedidoVinculo = null; desenharVinculoPedido(); }
     /* Peça do catálogo: o valor enviado vira a referência e ela sobe de uso */
     if (reg.catalogoId) gravarCatalogo(D.registrarUsoPeca(lerCatalogo(), reg.catalogoId, reg.valorPeca, new Date(reg.ts)));
-    mostrarEnviado(numero);
+    if (!extra.semAviso) mostrarEnviado(numero, formato);
+    return chave;
   }
   /* Reenvio: mesmo número, o contador não anda; soma 1 em "reenvios" */
   function registrarReenvio(reg, extra) {
-    var m = { reenvios: (reg.reenvios || 0) + 1, cliente: extra.cliente };
+    /* Orçamento registrado sem enviar: o primeiro envio troca o formato (Texto ou Imagem) e não conta como reenvio */
+    var m = reg.formato === 'sem-envio' ? { formato: extra.formato, cliente: extra.cliente } : { reenvios: (reg.reenvios || 0) + 1, cliente: extra.cliente };
     if (extra.formato === 'imagem') { m.descricao = extra.descricao; m.prazo = extra.prazo; }
     gravarLista(D.atualizarRegistro(lerLista(), D.chaveRegistro(reg), m));
     if (!$('tela-hist').hidden) desenharHist();
@@ -376,7 +380,9 @@
     eImgDesc.value = envioReg ? envioReg.descricao : (pedidoVinculo ? pedidoVinculo.descricao : pecaVinculada() ? D.descricaoDaPeca(pecaVinculada()) : '');
     eImgPrazo.value = envioReg && envioReg.prazo ? envioReg.prazo : config.negocio.prazo;
     $('painel-imagem').hidden = true; $('abrir-imagem').setAttribute('aria-pressed', 'false');
-    $('folha-rotulo').textContent = envioReg ? 'Reenviar orçamento' : 'Enviar orçamento';
+    $('folha-rotulo').textContent = envioReg && envioReg.formato !== 'sem-envio' ? 'Reenviar orçamento' : 'Enviar orçamento';
+    $('se-abrir').hidden = !!envioReg;          // registrar sem enviar só existe para orçamento novo
+    seInformado = ''; $('se-aprovado').checked = false; mostrarSemEnvio(false);
     $('folha-numero').textContent = 'Nº ' + C.formatarNumero(numeroEnvio());
     desenharChipsClientes();
     descartarImagem();
@@ -449,10 +455,46 @@
     clearTimeout(timerImagem); timerImagem = setTimeout(prepararImagem, 250);
   }
   $('abrir-imagem').addEventListener('click', function () {
+    mostrarSemEnvio(false);
     $('painel-imagem').hidden = false; $('abrir-imagem').setAttribute('aria-pressed', 'true');
     prepararImagem();
   });
   [eCliente, eImgDesc, eImgPrazo].forEach(function (el) { el.addEventListener('input', agendarImagem); selecionarAoFocar(el); });
+
+  /* Registrar sem enviar: orçamento informado pessoalmente, por telefone ou outro meio. Grava como Orçado, com Nº e validade, sem compartilhar.
+     Com "Já aprovado pelo cliente", abre em seguida o painel de condição de pagamento (o mesmo da aprovação). */
+  var seInformado = '';
+  function desenharSemEnvio() {
+    Array.prototype.forEach.call($('se-informado').querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.inf === seInformado)); });
+    var n = 'Nº ' + C.formatarNumero(numeroEnvio());
+    $('se-registrar').textContent = $('se-aprovado').checked ? 'Registrar e aprovar ' + n : 'Registrar orçamento ' + n;
+  }
+  function mostrarSemEnvio(abrir) {
+    $('painel-sem-envio').hidden = !abrir;
+    $('se-abrir').setAttribute('aria-expanded', String(!!abrir));
+    if (abrir) desenharSemEnvio();
+  }
+  $('se-abrir').addEventListener('click', function () {
+    var abrir = $('painel-sem-envio').hidden;
+    if (abrir) { $('painel-imagem').hidden = true; $('abrir-imagem').setAttribute('aria-pressed', 'false'); }
+    mostrarSemEnvio(abrir);
+  });
+  Array.prototype.forEach.call($('se-informado').querySelectorAll('button'), function (b) {
+    b.addEventListener('click', function () { seInformado = seInformado === b.dataset.inf ? '' : b.dataset.inf; desenharSemEnvio(); });
+  });
+  $('se-aprovado').addEventListener('change', desenharSemEnvio);
+  $('se-registrar').addEventListener('click', function () {
+    if (envioReg) return;
+    var numero = numeroEnvio(), orc = orcamentoEnvio(), aprovar = $('se-aprovado').checked;
+    var extra = { orcamento: orc, material: nomeFilamentoEnvio(), cliente: D.limparTexto(eCliente.value, 60), descricao: D.limparTexto(eImgDesc.value, 120),
+      validadeAte: datasEnvio().validadeAte, entrada: entradaAtual(), informado: seInformado, semAviso: aprovar };
+    fecharFolha();
+    var chave = registrarEnvio(numero, 'sem-envio', extra);
+    if (!aprovar) return;
+    var reg = achaPorChave(chave);
+    if (!reg) { avisar('Orçamento Nº ' + C.formatarNumero(numero) + ' registrado'); return; }
+    detChave = chave; desenharDetalhe(reg); abrirCond(reg, 'aprovar');
+  });
 
   function baixarImagem(img) {
     var a = document.createElement('a');
@@ -940,11 +982,24 @@
 
   /* ---------- Histórico de orçamentos ---------- */
   var LEMBRETE_BACKUP_ATIVO = true;    // faixa de lembrete de backup no topo do histórico (20 ou mais orçamentos desde o último backup)
-  var histPeriodo = '30', histSituacao = '', histPagamento = '', histExtra = {}, histBusca = '', histLimite = 50, histTimerBusca;
+  var histPeriodo = '30', histSituacao = '', histPagamento = '', histBusca = '', histLimite = 50, histTimerBusca;
+  /* Lista filtrada aberta pelo Negócio ou pelo Início (A receber, Esperando resposta, Vencidos, Ver das tarefas): tela de tarefa #lista,
+     com seta e o nome do filtro, sem barra de abas. O filtro fica separado dos chips da aba Pedidos (que nunca herda filtro escondido)
+     e guardado na sessão, para sobreviver a puxar a tela e recarregar. { titulo, situacao, pagamento, venceEm, prazoVencido, aReceber, vazio } */
+  var CHAVE_LISTA = CHAVE + '-lista';
+  var listaFiltro = null;
+  try { listaFiltro = JSON.parse(sessionStorage.getItem(CHAVE_LISTA) || 'null'); } catch (e) { listaFiltro = null; }
+  function emLista() { return location.hash === '#lista' && !!listaFiltro; }
+  function abrirLista(f) {
+    listaFiltro = f;
+    try { sessionStorage.setItem(CHAVE_LISTA, JSON.stringify(f)); } catch (e) {}
+    histBusca = ''; $('hist-busca').value = ''; histLimite = 50;
+    irTarefa('lista');
+  }
+  var destaqueChave = null;            // pedido recém-anotado: a linha pisca em verde uma vez
   var CHAVE_PERIODO = CHAVE + '-periodo';          // período escolhido (vale para a Lista e para o painel de vendas)
   try { var perSalvo = localStorage.getItem(CHAVE_PERIODO); if (['hoje', '7', '30', 'mes', 'tudo'].indexOf(perSalvo) !== -1) histPeriodo = perSalvo; } catch (e) {}
-  var ESPERA = ['pedido', 'enviado', 'vencido', 'producao', 'embalagem', 'pronto'];   // filas de trabalho: sem período, do mais antigo para o mais novo
-  var CONTAR_NO_CHIP = ['pedido', 'enviado', 'vencido', 'pronto'];                    // chips de ação mostram a contagem
+  var ESPERA = ['pedido', 'enviado', 'vencido', 'aprovado', 'producao', 'embalagem', 'pronto'];   // filas de trabalho: sem período, do mais antigo para o mais novo (Aprovado desde o 0.6.0-teste.12)
   var CANAL_ROT = { whatsapp: 'WhatsApp', instagram: 'Instagram', presencial: 'Presencial', outro: 'Outro' };
   function rotuloEtapa(st) { return (st === 'entregue' ? '✓ ' : '') + D.ROTULOS_ETAPA[st]; }
   var detChave = null;                 // orçamento aberto no detalhe
@@ -955,11 +1010,26 @@
     if (txt !== undefined) e.textContent = txt;
     return e;
   }
+  /* Chip com o número de itens que aparecem ao tocar nele; zero = sem número e texto mais claro */
+  function pintarChip(b, rotulo, n, ligado) {
+    b.textContent = rotulo;
+    if (n > 0) b.appendChild(el('span', 'n', String(n)));
+    b.classList.toggle('zero', !(n > 0));
+    b.setAttribute('aria-pressed', String(ligado));
+    b.setAttribute('aria-label', rotulo + (n > 0 ? ', ' + n : ', nenhum'));
+  }
   function desenharHist() {
     var todos = lerLista(), hoje = new Date();
-    var espera = ESPERA.indexOf(histSituacao) !== -1 || (!histSituacao && !!histPagamento) || !!histExtra.prazoVencido || !!histExtra.aReceber;
-    var lista = D.filtrarRegistros(todos, { periodo: histExtra.prazoVencido || histExtra.aReceber ? 'tudo' : histPeriodo, situacao: histSituacao, pagamento: histPagamento, venceEm: histExtra.venceEm, prazoVencido: histExtra.prazoVencido, busca: histBusca, hoje: hoje });
-    if (histExtra.aReceber) lista = lista.filter(function (r) { return D.situacaoPagamento(r).falta > 0; });
+    var lst = emLista() ? listaFiltro : null;
+    var sit = lst ? lst.situacao || '' : histSituacao, pag = lst ? lst.pagamento || '' : histPagamento;
+    var espera = !!lst || ESPERA.indexOf(sit) !== -1 || (!sit && !!pag);
+    var lista = D.filtrarRegistros(todos, { periodo: lst ? 'tudo' : histPeriodo, situacao: sit, pagamento: pag, venceEm: lst ? lst.venceEm : '', prazoVencido: lst ? lst.prazoVencido : false, busca: histBusca, hoje: hoje });
+    if (lst && lst.aReceber) lista = lista.filter(function (r) { var p = D.situacaoPagamento(r); return !!p.estado && p.falta > 0; });   // a mesma regra do cartão A receber
+    /* Cabeçalho: aba Pedidos ou lista filtrada (tela de tarefa) */
+    $('hist-voltar').hidden = !lst;
+    $('hist-titulo').textContent = lst ? lst.titulo : 'Pedidos';
+    $('ped-novo').hidden = !!lst;
+    $('hist-sit').hidden = !!lst;
     var res = D.resumir(lista);
     $('hist-n').textContent = String(lista.filter(function (r) { return r.status !== 'pedido'; }).length);   // pedido ainda sem orçamento não conta como enviado
     $('hist-total').textContent = moeda(res.total);
@@ -969,25 +1039,33 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-per]'), function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.per === histPeriodo));
     });
-    var cont = D.contarEtapas(todos, hoje);
-    Array.prototype.forEach.call(document.querySelectorAll('[data-sit]'), function (b) {
-      var st = b.dataset.sit;
-      b.setAttribute('aria-pressed', String(st === histSituacao));
-      b.textContent = D.ROTULOS_ETAPA[st] + (CONTAR_NO_CHIP.indexOf(st) !== -1 && cont[st] ? ' ' + cont[st] : '');
-    });
+    if (!lst) {
+      /* O número de cada chip = o que aparece ao tocar nele, combinado com o outro chip que já estiver ligado (etapa × pagamento) */
+      Array.prototype.forEach.call(document.querySelectorAll('[data-sit]'), function (b) {
+        var st = b.dataset.sit;
+        pintarChip(b, D.ROTULOS_ETAPA[st], D.filtrarRegistros(todos, { periodo: histPeriodo, situacao: st, pagamento: histPagamento, hoje: hoje }).length, st === histSituacao);
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-pag]'), function (b) {
+        var pg = b.dataset.pag;
+        pintarChip(b, D.ROTULOS_PAGAMENTO[pg], D.filtrarRegistros(todos, { periodo: histPeriodo, situacao: histSituacao, pagamento: pg, hoje: hoje }).length, pg === histPagamento);
+      });
+    }
     $('hist-per').hidden = espera;
-    Array.prototype.forEach.call(document.querySelectorAll('[data-pag]'), function (b) {
-      var pg = b.dataset.pag;
-      b.setAttribute('aria-pressed', String(pg === histPagamento));
-      b.textContent = D.ROTULOS_PAGAMENTO[pg] + (cont.pagamento[pg] ? ' ' + cont.pagamento[pg] : '');
-    });
-    var filtrado = !!histSituacao || !!histPagamento || !!histExtra.prazoVencido || !!histExtra.aReceber;
+    var filtrado = !!lst || !!sit || !!pag;
     $('hist-resumo').hidden = filtrado;
     var resSit = $('hist-sit-resumo');
-    resSit.hidden = !filtrado;
+    resSit.hidden = !filtrado || !!(lst && lst.aReceber);      // em A receber o cartão já diz quantos são
     if (filtrado) {
       var ordem = espera ? ' · mais antigos primeiro' : '';
-      resSit.textContent = res.qtd + (res.qtd === 1 ? ' registro' : ' registros') + (res.total > 0 ? ' · ' + moeda(res.total) : '') + ordem;
+      resSit.textContent = res.qtd + (res.qtd === 1 ? ' registro' : ' registros') + (res.total > 0 && !(lst && lst.aReceber) ? ' · ' + moeda(res.total) : '') + ordem;
+    }
+    var comReceber = !!(lst && lst.aReceber);
+    $('hist-receber').hidden = !comReceber;
+    if (comReceber) {
+      var ar = D.aReceber(todos), rec = D.recebidoNoPeriodo(todos, histPeriodo, hoje);
+      $('hr-falta').textContent = moeda(ar.total);
+      $('hr-qtd').textContent = ar.qtd === 1 ? '1 pedido com saldo' : ar.qtd + ' pedidos com saldo';
+      $('hr-recebido').textContent = 'recebido (' + ROTULO_PERIODO[histPeriodo].toLowerCase() + '): ' + moeda(rec.total);
     }
     var ultimoBackup = lerEstadoBackup();
     var lemb = LEMBRETE_BACKUP_ATIVO ? D.precisaLembreteBackup(todos, ultimoBackup) : { mostrar: false, qtd: 0 };
@@ -1000,12 +1078,13 @@
       vazio.hidden = false;
       vazio.textContent = !todos.length ? 'Nenhum pedido ainda. Toque em + Pedido para anotar um, ou em + Orçar para fazer um orçamento.'
         : histBusca ? 'Nada encontrado para “' + histBusca + '”.'
-        : histPagamento && !histSituacao ? 'Nenhum pedido com pagamento ' + D.ROTULOS_PAGAMENTO[histPagamento].toLowerCase() + '.'
-        : histSituacao === 'enviado' ? 'Nenhum orçamento aguardando resposta.'
-        : histSituacao === 'vencido' ? 'Nenhum orçamento vencido.'
-        : histSituacao === 'pedido' ? 'Nenhum pedido para orçar.'
-        : espera ? 'Nada em ' + D.ROTULOS_ETAPA[histSituacao] + ' agora.'
-        : histSituacao ? 'Nada em ' + D.ROTULOS_ETAPA[histSituacao] + ' neste período. Toque em Tudo para ver todos.'
+        : lst ? lst.vazio || 'Nada aqui agora.'
+        : pag && !sit ? 'Nenhum pedido com pagamento ' + D.ROTULOS_PAGAMENTO[pag].toLowerCase() + '.'
+        : sit === 'enviado' ? 'Nenhum orçamento aguardando resposta.'
+        : sit === 'vencido' ? 'Nenhum orçamento vencido.'
+        : sit === 'pedido' ? 'Nenhum pedido para orçar.'
+        : sit && espera ? 'Nada em ' + D.ROTULOS_ETAPA[sit] + ' agora.'
+        : sit ? 'Nada em ' + D.ROTULOS_ETAPA[sit] + ' neste período. Toque em Tudo para ver todos.'
         : 'Nada neste período. Toque em Tudo para ver todos.';
     } else { vazio.hidden = true; }
     var grupos = espera ? [{ rotulo: '', itens: lista.slice(0, histLimite) }] : D.agruparPorDia(lista.slice(0, histLimite), hoje);
@@ -1015,31 +1094,52 @@
       g.itens.forEach(function (r) {
         var it = el('button', 'item'); it.type = 'button';
         var meio = el('span', 'meio');
-        meio.appendChild(el('span', 'sup', r.n > 0 ? 'Nº ' + C.formatarNumero(r.n) + ' · ' + D.hora(r.ts) + ' · ' + (r.formato === 'imagem' ? 'Imagem' : 'Texto')
-          : 'Pedido · ' + D.hora(r.ts) + (r.canal ? ' · ' + CANAL_ROT[r.canal] : '')));
-        meio.appendChild(el('strong', r.cliente ? '' : 'sem', r.cliente || 'Sem cliente'));
-        meio.appendChild(el('span', 'peca', D.descricaoLinha(r)));
-        var dir = el('span', 'dir');
         var st = D.situacao(r, hoje);
-        if (r.status === 'pedido') { if (r.prazoDesejado) dir.appendChild(el('b', '', 'prazo ' + D.validadeCurta(r.prazoDesejado, hoje))); }
-        else dir.appendChild(el('b', '', moeda(r.total)));
-        var pills = el('span', 'pills');
-        if (espera && (st === 'enviado' || st === 'vencido')) {
-          var te = D.textoEspera(r, hoje);
-          pills.appendChild(el('span', 'pill ' + (te.antigo ? 'vencido' : 'enviado'), te.texto));
+        if (comReceber) {      // A receber: menos coisa na linha para caber o botão Recebi (etapa e pagamento em cima, só o que falta à direita)
+          var pgr = D.situacaoPagamento(r);
+          meio.appendChild(el('span', 'sup', 'Nº ' + C.formatarNumero(r.n) + ' · ' + D.ROTULOS_ETAPA[st] + ' · ' + pgr.rotulo));
+          meio.appendChild(el('strong', r.cliente ? '' : 'sem', r.cliente || 'Sem cliente'));
+          meio.appendChild(el('span', 'peca', D.descricaoLinha(r)));
+          var dirR = el('span', 'dir');
+          dirR.appendChild(el('span', 'falta-rot', 'falta')); dirR.appendChild(el('b', '', moeda(pgr.falta)));
+          it.appendChild(meio); it.appendChild(dirR);
         } else {
-          pills.appendChild(el('span', 'pill ' + st, rotuloEtapa(st)));
+          meio.appendChild(el('span', 'sup', r.n > 0 ? 'Nº ' + C.formatarNumero(r.n) + ' · ' + D.hora(r.ts) + ' · ' + D.rotuloFormato(r)
+            : 'Pedido · ' + D.hora(r.ts) + (r.canal ? ' · ' + CANAL_ROT[r.canal] : '')));
+          meio.appendChild(el('strong', r.cliente ? '' : 'sem', r.cliente || 'Sem cliente'));
+          meio.appendChild(el('span', 'peca', D.descricaoLinha(r)));
+          var dir = el('span', 'dir');
+          if (r.status === 'pedido') { if (r.prazoDesejado) dir.appendChild(el('b', '', 'prazo ' + D.validadeCurta(r.prazoDesejado, hoje))); }
+          else dir.appendChild(el('b', '', moeda(r.total)));
+          var pills = el('span', 'pills');
+          if (espera && (st === 'enviado' || st === 'vencido')) {
+            var te = D.textoEspera(r, hoje);
+            pills.appendChild(el('span', 'pill ' + (te.antigo ? 'vencido' : 'enviado'), te.texto));
+          } else {
+            pills.appendChild(el('span', 'pill ' + st, rotuloEtapa(st)));
         }
         var pgl = D.situacaoPagamento(r);
         if (pgl.estado) pills.appendChild(el('span', 'pill-pag ' + pgl.estado, pgl.rotulo));
         dir.appendChild(pills);
         it.appendChild(meio); it.appendChild(dir);
+        }
         it.addEventListener('click', function () { abrirDetalhe(r); });
-        bloco.appendChild(it);
+        if (destaqueChave && D.chaveRegistro(r) === destaqueChave) it.classList.add('novo');
+        if (comReceber) {      // A receber: botão Recebi ao lado da linha (abre o painel de recebimento com o que falta)
+          var linha = el('div', 'linha-rec'), rb = el('button', 'btn-recebi', 'Recebi'); rb.type = 'button';
+          rb.setAttribute('aria-label', 'Recebi de ' + (r.cliente || 'Nº ' + C.formatarNumero(r.n)));
+          rb.addEventListener('click', function () { receberDaLista(r); });
+          linha.appendChild(it); linha.appendChild(rb); bloco.appendChild(linha);
+        } else bloco.appendChild(it);
       });
       box.appendChild(bloco);
     });
     $('hist-mais').hidden = lista.length <= histLimite;
+    destaqueChave = null;
+  }
+  function receberDaLista(r) {
+    var reg = achaPorChave(D.chaveRegistro(r)); if (!reg) return;
+    detChave = D.chaveRegistro(reg); desenharDetalhe(reg); abrirRec();
   }
   $('hist-busca').addEventListener('input', function () {
     clearTimeout(histTimerBusca);
@@ -1058,10 +1158,10 @@
     b.addEventListener('click', function () { mudarPeriodo(b.dataset.perv); });
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-sit]'), function (b) {
-    b.addEventListener('click', function () { histSituacao = histSituacao === b.dataset.sit ? '' : b.dataset.sit; histExtra = {}; histLimite = 50; desenharHist(); });
+    b.addEventListener('click', function () { histSituacao = histSituacao === b.dataset.sit ? '' : b.dataset.sit; histLimite = 50; desenharHist(); });
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-pag]'), function (b) {
-    b.addEventListener('click', function () { histPagamento = histPagamento === b.dataset.pag ? '' : b.dataset.pag; histExtra = {}; histLimite = 50; desenharHist(); });
+    b.addEventListener('click', function () { histPagamento = histPagamento === b.dataset.pag ? '' : b.dataset.pag; histLimite = 50; desenharHist(); });
   });
   $('hist-mais').addEventListener('click', function () { histLimite += 50; desenharHist(); });
 
@@ -1113,6 +1213,7 @@
     desenharPagamento(reg);
     $('det-antigo').hidden = pedido || !!reg.entrada;
     $('det-usar').disabled = !reg.entrada;
+    $('det-reenviar-txt').textContent = reg.formato === 'sem-envio' ? 'Enviar agora' : 'Reenviar';
     $('det-catalogo').disabled = !reg.entrada;  // registro antigo, sem os dados da mesa, não vira peça
     $('det-excluir').textContent = 'Excluir';
   }
@@ -1329,8 +1430,10 @@
     var reg = D.novoPedido({ cliente: cliente, texto: texto, qtd: C.lerQuantidade($('ped-qtd').value), prazoDesejado: $('ped-prazo').value, canal: pedCanal }, new Date());
     if (!gravarLista(D.adicionarRegistro(lista, reg, D.MAX_REGISTROS))) return;
     fecharAnotarPedido();
-    histSituacao = ''; histBusca = ''; $('hist-busca').value = ''; histLimite = 50;
-    desenharHist();
+    /* O pedido novo tem que aparecer na hora: limpa etapa, pagamento e busca (o período sempre inclui hoje) e destaca a linha */
+    histSituacao = ''; histPagamento = ''; histBusca = ''; $('hist-busca').value = ''; histLimite = 50;
+    destaqueChave = D.chaveRegistro(reg);
+    desenharHist(); window.scrollTo(0, 0);
     avisar('Pedido anotado');
   });
   document.addEventListener('keydown', function (ev) {
@@ -1767,7 +1870,14 @@
   Array.prototype.forEach.call(document.querySelectorAll('[data-top]'), function (b) {
     b.addEventListener('click', function () { vTop = b.dataset.top; if (ultimoPainel) desenharTop(ultimoPainel); });
   });
-  function abrirFila(sit) { histSituacao = sit; histPagamento = ''; histExtra = {}; histLimite = 50; $('hist-busca').value = ''; histBusca = ''; trocarAba('pedidos'); }
+  var LISTAS = {
+    enviado: { titulo: 'Esperando resposta', situacao: 'enviado', vazio: 'Nenhum orçamento esperando resposta.' },
+    vencido: { titulo: 'Vencidos', situacao: 'vencido', vazio: 'Nenhum orçamento vencido.' },
+    pedido: { titulo: 'Pedidos para orçar', situacao: 'pedido', vazio: 'Nenhum pedido para orçar.' },
+    pronto: { titulo: 'Prontos para entregar', situacao: 'pronto', vazio: 'Nenhum pedido pronto.' },
+    aReceber: { titulo: 'A receber', aReceber: true, vazio: 'Nada a receber. Todos os pedidos aprovados estão pagos.' }
+  };
+  function abrirFila(sit) { abrirLista(LISTAS[sit] || { titulo: D.ROTULOS_ETAPA[sit] || 'Pedidos', situacao: sit }); }
   $('v-ag').addEventListener('click', function () { abrirFila('enviado'); });
   $('v-ve').addEventListener('click', function () { abrirFila('vencido'); });
   $('v-vazio-btn').addEventListener('click', function () { histSituacao = ''; trocarAba('pedidos'); });
@@ -1835,7 +1945,7 @@
      Telas de tarefa (Novo orçamento, Catálogo, Painel de vendas, Orçamentos, subtelas de Mais) empilham, ficam sem a barra de abas e voltam pela seta.
      Cada entrada do histórico guarda { d: quantas entradas há acima do Início, aba: 1 se é uma aba aberta a partir do Início }. */
   var BASE = location.pathname + location.search;
-  var TELA_DA_ROTA = { pedidos: 'hist', historico: 'hist', negocio: 'negocio', tarefas: 'tarefas', vendas: 'vendas', catalogo: 'cat', orcar: 'calc' };
+  var TELA_DA_ROTA = { pedidos: 'hist', historico: 'hist', lista: 'hist', negocio: 'negocio', tarefas: 'tarefas', vendas: 'vendas', catalogo: 'cat', orcar: 'calc' };
   function hashAtual() { return location.hash.replace(/^#/, ''); }
   function profundidade() { var e = history.state; return e && typeof e.d === 'number' ? e.d : 0; }
   function telaDaRota() {
@@ -1843,7 +1953,7 @@
     if (h === 'config' || h === 'mais' || subDaRota()) return 'config';
     return Object.prototype.hasOwnProperty.call(TELA_DA_ROTA, h) ? TELA_DA_ROTA[h] : 'inicio';   // rota desconhecida abre o Início
   }
-  function abaDaTela(t, sub) { return t === 'inicio' || t === 'negocio' ? t : t === 'hist' ? 'pedidos' : t === 'config' && !sub ? 'mais' : ''; }
+  function abaDaTela(t, sub) { return t === 'inicio' || t === 'negocio' ? t : t === 'hist' ? (emLista() ? '' : 'pedidos') : t === 'config' && !sub ? 'mais' : ''; }
   /* Troca entre Lista e Vendas (e vai da fila do painel ao Histórico) sem empilhar tela */
   function trocarAba(destino) { history.replaceState(history.state, '', BASE + '#' + destino); rota(); }
   function irTarefa(h) { history.pushState({ d: profundidade() + 1 }, '', BASE + '#' + h); rota(); }
@@ -1955,15 +2065,16 @@
   $('calc-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
   $('vendas-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
   $('tar-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
+  $('hist-voltar').addEventListener('click', function () { voltarTarefa('inicio'); });
   $('cat-voltar').addEventListener('click', function () { voltarTarefa('mais'); });
   $('cat-abrir').addEventListener('click', function () { irTarefa('catalogo'); });
 
   /* Depois de enviar: aviso curto sobre o Novo orçamento (os campos continuam preenchidos) */
   var timerEnviado;
   function fecharEnviado() { clearTimeout(timerEnviado); $('env-aviso').hidden = true; }
-  function mostrarEnviado(numero) {
+  function mostrarEnviado(numero, formato) {
     if ($('tela-calc').hidden) return;
-    $('env-titulo').textContent = 'Orçamento Nº ' + C.formatarNumero(numero) + ' enviado';
+    $('env-titulo').textContent = 'Orçamento Nº ' + C.formatarNumero(numero) + (formato === 'sem-envio' ? ' registrado' : ' enviado');
     $('env-aviso').hidden = false;
     clearTimeout(timerEnviado); timerEnviado = setTimeout(fecharEnviado, 6000);
   }
@@ -2045,10 +2156,10 @@
     var a = t.alvo || {};
     if (a.tela === 'pedidos') {
       var f = a.filtro || {};
-      histSituacao = f.situacao || ''; histPagamento = f.pagamento || '';
-      histExtra = { venceEm: f.venceEm, prazoVencido: f.prazoVencido };
-      histBusca = ''; $('hist-busca').value = ''; histLimite = 50;
-      irAba('pedidos');
+      var base = f.venceEm ? { titulo: 'Vencem hoje', vazio: 'Nenhum orçamento vence hoje.' }
+        : f.prazoVencido ? { titulo: 'Prazo vencido', vazio: 'Nenhum pedido com prazo vencido.' }
+        : LISTAS[f.situacao] || { titulo: D.ROTULOS_ETAPA[f.situacao] || 'Pedidos' };
+      abrirLista({ titulo: base.titulo, vazio: base.vazio, situacao: f.situacao || '', pagamento: f.pagamento || '', venceEm: f.venceEm || '', prazoVencido: !!f.prazoVencido });
     } else if (a.tela === 'config-backup') irTarefa('config-backup');
     else if (a.tela === 'cobrar') abrirCobrar(t.chave);
     else if (a.tela === 'recebimento') {
@@ -2098,8 +2209,7 @@
   $('n-ag').addEventListener('click', function () { abrirFila('enviado'); });
   $('n-ve').addEventListener('click', function () { abrirFila('vencido'); });
   $('n-receber').addEventListener('click', function () {
-    histSituacao = ''; histPagamento = ''; histExtra = { aReceber: true }; histBusca = ''; $('hist-busca').value = ''; histLimite = 50;
-    irAba('pedidos');
+    abrirLista(LISTAS.aReceber);
   });
   $('ini-vendas-btn').addEventListener('click', function () { irAba('negocio'); });
   $('ini-fazer').addEventListener('click', function () { irTarefa('orcar'); });
