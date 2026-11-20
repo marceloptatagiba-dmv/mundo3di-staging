@@ -130,6 +130,7 @@
     /* Prazo, pagamento e observações */
     bloco('PRAZO DE ENTREGA', d.prazo, 2);
     bloco('PAGAMENTO', d.pagamento, 2);
+    bloco('CHAVE PIX', d.pix, 2);          // só com Pix marcado (desde o 0.6.0-teste.14)
     bloco('OBSERVAÇÕES', d.obs, 4);
 
     /* Rodapé: faixa verde */

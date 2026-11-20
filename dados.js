@@ -16,7 +16,20 @@
   var INFORMADO = ['presencial', 'telefone', 'outro'];
   var ROTULOS_INFORMADO = { presencial: 'Pessoalmente', telefone: 'Telefone', outro: 'Outro meio' };
   var CONDICOES = ['entrega', 'entrada', 'pago'];
-  var FORMAS_PAGAMENTO = ['pix', 'dinheiro', 'cartao', 'transferencia', 'outro'];
+  /* Formas do Registrar recebimento (desde o 0.6.0-teste.14: as mesmas dos chips do orçamento). As antigas continuam sendo lidas
+     nos registros já gravados; 'outro' fica para o "Já pago" e para forma desconhecida. */
+  var FORMAS_PAGAMENTO = ['pix', 'debito', 'credito', 'dinheiro'];
+  var FORMAS_LIDAS = FORMAS_PAGAMENTO.concat(['cartao', 'transferencia', 'outro']);
+  var FORMAS_OFERTA = ['pix', 'debito', 'credito', 'dinheiro'];   // formas oferecidas no orçamento (formasPag do registro)
+  function lerFormasPag(arr) { return Array.isArray(arr) ? FORMAS_OFERTA.filter(function (f) { return arr.indexOf(f) !== -1; }) : null; }
+  /* Pagamento, chave Pix e observação enviados no orçamento (desde o 0.6.0-teste.14). Só grava o que veio. */
+  function copiarPagEnvio(dest, o) {
+    var f = lerFormasPag(o.formasPag);
+    if (f) dest.formasPag = f;
+    if (o.pix !== undefined) dest.pix = limparTexto(o.pix, 77);
+    if (o.obs !== undefined) dest.obs = limparTexto(o.obs, 160);
+    return dest;
+  }
   var ROTULOS_PAGAMENTO = { pendente: 'Pendente', parcial: 'Parcial', pago: 'Pago' };
   var ENTRADA_PCT = 50;                  // entrada sugerida (% do total)
   var MAX_HISTORICO = 30;
@@ -138,6 +151,7 @@
     if (o.catalogoId) reg.catalogoId = limparTexto(o.catalogoId, 40);
     if (o.versaoApp) reg.versaoApp = limparTexto(o.versaoApp, 24);
     if (reg.formato === 'sem-envio' && INFORMADO.indexOf(o.informado) !== -1) reg.informado = o.informado;
+    copiarPagEnvio(reg, o);
     reg.historico = [{ etapa: 'enviado', em: reg.ts }];
     return reg;
   }
@@ -174,6 +188,7 @@
     if (dataValida(x.criadoEm)) r.criadoEm = x.criadoEm;
     if (CANAIS.indexOf(x.canal) !== -1) r.canal = x.canal;
     if (r.formato === 'sem-envio' && INFORMADO.indexOf(x.informado) !== -1) r.informado = x.informado;
+    copiarPagEnvio(r, { formasPag: x.formasPag, pix: typeof x.pix === 'string' ? x.pix : undefined, obs: typeof x.obs === 'string' ? x.obs : undefined });
     if (validoISO(x.prazoDesejado)) r.prazoDesejado = x.prazoDesejado;
     if (x.pedidoTexto) r.pedidoTexto = limparTexto(x.pedidoTexto, MAX_TEXTO_PEDIDO);
     if (dataValida(x.aprovadoEm)) r.aprovadoEm = x.aprovadoEm;
@@ -198,7 +213,7 @@
       x.recebimentos.slice(0, MAX_RECEBIMENTOS).forEach(function (i) {
         var v = i && Number(i.valor);
         if (!isFinite(v) || centavos(v) === 0 || !dataValida(i.em)) return;
-        pg.recebimentos.push({ valor: c2(v), em: i.em, forma: FORMAS_PAGAMENTO.indexOf(i.forma) !== -1 || i.forma === 'estorno' ? i.forma : 'outro' });
+        pg.recebimentos.push({ valor: c2(v), em: i.em, forma: FORMAS_LIDAS.indexOf(i.forma) !== -1 || i.forma === 'estorno' ? i.forma : 'outro' });
       });
     }
     return pg;
@@ -226,6 +241,7 @@
       if (m.validadeAte !== undefined && validoISO(m.validadeAte)) x.validadeAte = m.validadeAte;
       if (m.reenvios !== undefined) x.reenvios = Math.floor(n0(m.reenvios));
       if (m.formato !== undefined && FORMATOS.indexOf(m.formato) !== -1) { x.formato = m.formato; if (m.formato !== 'sem-envio') delete x.informado; }
+      copiarPagEnvio(x, m);
       if (m.status !== undefined && SITUACOES.indexOf(m.status) !== -1) {
         x = aplicarEtapa(x, m.status, dataValida(m.statusEm) ? m.statusEm : new Date().toISOString());   // grava historico e aprovadoEm (v6)
       }
@@ -1263,7 +1279,7 @@
 
   var Dados = {
     LIMITE_AVISO_REGISTROS: LIMITE_AVISO_REGISTROS, ROTULOS_ETAPA: ROTULOS_ETAPA, ROTULOS_PAGAMENTO: ROTULOS_PAGAMENTO, ROTULOS_CONDICAO: ROTULOS_CONDICAO,
-    CANAIS: CANAIS, CONDICOES: CONDICOES, FORMAS_PAGAMENTO: FORMAS_PAGAMENTO, ETAPAS_ABERTAS: ETAPAS_ABERTAS, ENTRADA_PCT: ENTRADA_PCT,
+    CANAIS: CANAIS, CONDICOES: CONDICOES, FORMAS_PAGAMENTO: FORMAS_PAGAMENTO, FORMAS_OFERTA: FORMAS_OFERTA, ETAPAS_ABERTAS: ETAPAS_ABERTAS, ENTRADA_PCT: ENTRADA_PCT,
     moedaBR: moedaBR, ehVenda: ehVenda, etapasDeVenda: etapasDeVenda, proximaEtapa: proximaEtapa, etapasSeguintes: etapasSeguintes, etapaAnterior: etapaAnterior,
     mudarEtapa: mudarEtapa, migrarAprovadoEm: migrarAprovadoEm, contarEtapas: contarEtapas, novoPedido: novoPedido, orcarPedido: orcarPedido,
     situacaoPagamento: situacaoPagamento, entradaSugerida: entradaSugerida, definirCondicao: definirCondicao, aprovarComCondicao: aprovarComCondicao,

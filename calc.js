@@ -293,8 +293,47 @@
   /* ---------- Meu negócio e dados do orçamento (o registro dos envios fica em dados.js) ---------- */
 
   var NOME_PADRAO = 'Mundo 3Di';
-  var LIMITES_NEGOCIO = { nome: 40, whatsapp: 20, instagram: 40, cidade: 40, cnpj: 18, prazo: 40, pagamento: 80, obs: 160 };
+  var LIMITES_NEGOCIO = { nome: 40, whatsapp: 20, instagram: 40, cidade: 40, cnpj: 18, prazo: 40, pagamento: 80, obs: 160, pix: 77 };
   var VALIDADE_PADRAO = 7;     // dias
+  /* Formas de pagamento oferecidas no orçamento (chips; desde o 0.6.0-teste.14). "pagamento" (texto livre) só é lido para converter. */
+  var FORMAS_OFERTA = ['pix', 'debito', 'credito', 'dinheiro'];
+  var ROTULOS_FORMA = { pix: 'Pix', debito: 'Débito', credito: 'Crédito', dinheiro: 'Dinheiro' };
+
+  function semAcento(t) { return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+  /* Lista de formas válida e na ordem dos chips; o que não é lista -> null */
+  function lerFormas(arr) { return Array.isArray(arr) ? FORMAS_OFERTA.filter(function (f) { return arr.indexOf(f) !== -1; }) : null; }
+  /* "Pix, Crédito ou Dinheiro" ('' sem formas) */
+  function fraseFormas(formas) {
+    var n = (lerFormas(formas) || []).map(function (f) { return ROTULOS_FORMA[f]; });
+    return n.length <= 1 ? n.join('') : n.slice(0, -1).join(', ') + ' ou ' + n[n.length - 1];
+  }
+  /* Converte o texto antigo de "Formas de pagamento" em chips. O trecho que não é só forma de pagamento vira "resto"
+     ("Pix ou cartão em até 3x" -> formas pix, débito e crédito; resto "Cartão em até 3x"). "Cartão" sem débito/crédito marca os dois. */
+  function formasDoTexto(texto) {
+    var t = String(texto == null ? '' : texto).replace(/\s+/g, ' ').trim(), achadas = [], resto = [];
+    if (!t) return { formas: [], resto: '' };
+    t.split(/\s*(?:,|;|\/|\+|\s(?:ou|e)\s)\s*/i).forEach(function (parte) {
+      if (!parte) return;
+      var p = semAcento(parte), daParte = [];
+      if (/\bpix\b/.test(p)) daParte.push('pix');
+      if (/\bdebito\b/.test(p)) daParte.push('debito');
+      if (/\bcredito\b/.test(p)) daParte.push('credito');
+      if (/\bcart(ao|oes)\b/.test(p) && !/debito|credito/.test(p)) daParte.push('debito', 'credito');
+      if (/\bdinheiro\b|\bespecie\b/.test(p)) daParte.push('dinheiro');
+      daParte.forEach(function (f) { if (achadas.indexOf(f) === -1) achadas.push(f); });
+      var sobra = p.replace(/\b(pix|debito|credito|cart(ao|oes)|dinheiro|especie|no|na|de|do|em)\b/g, '').replace(/[^a-z0-9]/g, '');
+      if (!daParte.length || sobra) resto.push(parte);
+    });
+    var r = resto.join(', ');
+    if (r) r = r.charAt(0).toUpperCase() + r.slice(1);
+    return { formas: lerFormas(achadas), resto: r };
+  }
+  /* Observação + resto do texto antigo, separados por ponto (até 160 letras) */
+  function juntarObs(obs, resto) {
+    if (!resto) return obs;
+    var a = obs ? (/[.!?]$/.test(obs) ? obs : obs + '.') + ' ' : '';
+    return (a + resto + (/[.!?]$/.test(resto) ? '' : '.')).slice(0, LIMITES_NEGOCIO.obs);
+  }
 
   /* Dados do negócio de uma configuração salva. Texto aparado e limitado; validade em dias (0 = não mostrar). */
   function lerNegocio(salvo) {
@@ -308,6 +347,18 @@
     if (dw.length === 10 || dw.length === 11 || (dw.length >= 12 && dw.length <= 13 && dw.slice(0, 2) === '55')) n.whatsapp = formatarTelefone(dw);
     n.validadeDias = typeof s.validadeDias === 'number' && isFinite(s.validadeDias) && s.validadeDias >= 0
       ? Math.min(Math.round(s.validadeDias), 365) : VALIDADE_PADRAO;
+    /* Formas de pagamento em chips. Configuração antiga (só o texto "pagamento"): converte uma vez, leva o resto para a
+       observação e deixa um aviso (avisoPagTexto/avisoPagResto) para conferir em Meu negócio. */
+    var formas = lerFormas(s.formas);
+    if (formas) {
+      n.formas = formas;
+      if (typeof s.avisoPagTexto === 'string' && s.avisoPagTexto) { n.avisoPagTexto = s.avisoPagTexto.slice(0, 80); n.avisoPagResto = String(s.avisoPagResto || '').slice(0, 80); }
+    } else {
+      var conv = formasDoTexto(n.pagamento);
+      n.formas = conv.formas;
+      if (n.pagamento) { n.obs = juntarObs(n.obs, conv.resto); n.avisoPagTexto = n.pagamento; n.avisoPagResto = conv.resto; n.migrouPagamento = true; }
+    }
+    delete n.pagamento;
     return n;
   }
 
@@ -330,7 +381,8 @@
   /*
    * Tudo o que vai escrito na imagem do orçamento — e só isso. Não recebe custo, margem, perda nem lucro
    * como campo: o desenho da imagem usa apenas este objeto.
-   * o: { negocio, numero, data (Date), cliente, descricao, material, prazo, validadeAte }
+   * o: { negocio, numero, data (Date), cliente, descricao, material, prazo, validadeAte, formas, pix, obs }
+   * formas, pix e obs (opcionais): os deste orçamento; sem eles, valem os de Meu negócio. A chave Pix só sai com Pix marcado.
    * validadeAte ('AAAA-MM-DD', ou '' para não mostrar): vale no lugar de data + validade padrão (reenvio de um orçamento antigo).
    */
   function dadosOrcamento(r, o) {
@@ -340,6 +392,7 @@
     var descricao = limpa(o && o.descricao, 120) || (r.qtd > 1 ? r.qtd + ' peças impressas em 3D' : 'Peça impressa em 3D');
     var validade = negocio.validadeDias > 0 ? formatarData(somarDias(data, negocio.validadeDias)) : '';
     if (o && typeof o.validadeAte === 'string') validade = isoParaBR(o.validadeAte);
+    var formasEnv = (o && lerFormas(o.formas)) || negocio.formas;
     return {
       numero: formatarNumero(o && o.numero),
       data: formatarData(data),
@@ -353,15 +406,17 @@
       valorPeca: r.qtd > 1 ? moeda(r.valorUnitario) : '',
       total: moeda(r.valorCobrar),
       prazo: limpa(o && o.prazo, LIMITES_NEGOCIO.prazo),
-      pagamento: negocio.pagamento,
-      obs: negocio.obs
+      pagamento: fraseFormas(formasEnv),
+      pix: formasEnv.indexOf('pix') !== -1 ? (o && o.pix !== undefined ? limpa(o.pix, LIMITES_NEGOCIO.pix) : negocio.pix) : '',
+      obs: o && o.obs !== undefined ? limpa(o.obs, LIMITES_NEGOCIO.obs) : negocio.obs
     };
   }
 
   /* Texto do orçamento para enviar ao cliente (não revela custo nem margem).
      opcoes.material: nome do filamento — só entra no texto se vier preenchido (opção "Mostrar filamento no orçamento").
      opcoes.numero: nº do orçamento (inteiro) · opcoes.negocio: nome do negócio (vazio = Mundo 3Di).
-     opcoes.descricao: descrição da peça (vazia = "Peça impressa em 3D") · opcoes.prazo: prazo de entrega (vazio = sem a linha). Desde o 0.6.0-teste.13. */
+     opcoes.descricao: descrição da peça (vazia = "Peça impressa em 3D") · opcoes.prazo: prazo de entrega (vazio = sem a linha). Desde o 0.6.0-teste.13.
+     opcoes.formas (lista), opcoes.pix e opcoes.obs: pagamento, chave Pix (só com Pix marcado) e observação, no fim. Desde o 0.6.0-teste.14. */
   function textoOrcamento(r, opcoes) {
     var material = opcoes && opcoes.material ? String(opcoes.material).trim() : '';
     var descricao = opcoes && opcoes.descricao ? String(opcoes.descricao).replace(/\s+/g, ' ').trim() : '';
@@ -380,6 +435,12 @@
       linhas.push('*Valor: ' + moeda(r.valorCobrar) + '*');
     }
     if (prazo) linhas.push('Prazo de entrega: ' + prazo);
+    var formas = opcoes ? lerFormas(opcoes.formas) || [] : [];
+    var pix = opcoes && opcoes.pix ? String(opcoes.pix).replace(/\s+/g, ' ').trim() : '';
+    var obs = opcoes && opcoes.obs ? String(opcoes.obs).replace(/\s+/g, ' ').trim() : '';
+    if (formas.length) linhas.push('Pagamento: ' + fraseFormas(formas));
+    if (pix && formas.indexOf('pix') !== -1) linhas.push('Chave Pix: ' + pix);
+    if (obs) linhas.push('Obs.: ' + obs);
     return linhas.join('\n');
   }
 
@@ -434,6 +495,7 @@
     MODOS_ARREDONDAMENTO: MODOS_ARREDONDAMENTO, lerArredondamento: lerArredondamento, arredondarCima: arredondarCima,
     NOME_PADRAO: NOME_PADRAO, LIMITES_NEGOCIO: LIMITES_NEGOCIO, VALIDADE_PADRAO: VALIDADE_PADRAO,
     lerNegocio: lerNegocio, formatarNumero: formatarNumero, formatarData: formatarData,
+    FORMAS_OFERTA: FORMAS_OFERTA, ROTULOS_FORMA: ROTULOS_FORMA, lerFormas: lerFormas, fraseFormas: fraseFormas, formasDoTexto: formasDoTexto,
     dadosOrcamento: dadosOrcamento,
     VERSAO_RE: VERSAO_RE, lerVersao: lerVersao, compararVersoes: compararVersoes, avisoAtualizado: avisoAtualizado
   };

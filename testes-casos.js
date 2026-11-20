@@ -122,6 +122,27 @@
       '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*|*Orçamento — Mundo 3Di*\n3 peças impressas em 3D\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
     igual('texto: só prazo, sem descrição', C.textoOrcamento(r1, { prazo: 'amanhã' }).replace(NB, ' '), '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*\nPrazo de entrega: amanhã');
     igual('texto com descrição e prazo nunca mostra custo nem margem', /custo|margem|lucro|perda/i.test(C.textoOrcamento(r3, { descricao: 'Vaso', prazo: '3 dias', material: 'PLA' })), false);
+    // 0.6.0-teste.14: formas de pagamento em chips, chave Pix e observação do orçamento
+    var fdt = function (t) { var x = C.formasDoTexto(t); return x.formas.join('+') + '|' + x.resto; };
+    igual('formas do texto antigo: Pix ou cartão em até 3x', fdt('Pix ou cartão em até 3x'), 'pix+debito+credito|Cartão em até 3x');
+    igual('formas do texto antigo: lista simples, sem resto', [fdt('Pix, débito e crédito'), fdt('pix / dinheiro'), fdt('Cartão de crédito ou dinheiro'), fdt('PIX')].join(' · '), 'pix+debito+credito| · pix+dinheiro| · credito+dinheiro| · pix|');
+    igual('formas do texto antigo: nada reconhecido vira só resto; vazio não marca nada', [fdt('Boleto bancário'), fdt(''), fdt(null)].join(' · '), '|Boleto bancário · | · |');
+    var negMig = C.lerNegocio({ pagamento: 'Pix ou cartão em até 3x', obs: '50% na aprovação, 50% na entrega' });
+    igual('negócio antigo: converte para chips, leva o resto para a observação e deixa o aviso', [negMig.formas.join('+'), negMig.obs, negMig.avisoPagTexto, negMig.avisoPagResto, negMig.migrouPagamento, 'pagamento' in negMig].join('|'),
+      'pix+debito+credito|50% na aprovação, 50% na entrega. Cartão em até 3x.|Pix ou cartão em até 3x|Cartão em até 3x|true|false');
+    var negSalvo = C.lerNegocio({ formas: ['dinheiro', 'pix', 'boleto'], pix: '  chave@exemplo.com ', obs: 'Obrigado', avisoPagTexto: 'Pix ou cartão', avisoPagResto: '' });
+    igual('negócio novo: formas na ordem dos chips, desconhecida sai, chave aparada, aviso mantido, sem nova conversão', [negSalvo.formas.join('+'), negSalvo.pix, negSalvo.avisoPagTexto, 'migrouPagamento' in negSalvo].join('|'), 'pix+dinheiro|chave@exemplo.com|Pix ou cartão|false');
+    igual('negócio: lista vazia de formas é escolha (não converte o texto antigo)', C.lerNegocio({ formas: [], pagamento: 'Pix' }).formas.length + '|' + ('avisoPagTexto' in C.lerNegocio({ formas: [], pagamento: 'Pix' })), '0|false');
+    igual('frase das formas', [C.fraseFormas(['pix']), C.fraseFormas(['dinheiro', 'pix']), C.fraseFormas(['pix', 'debito', 'credito', 'dinheiro']), C.fraseFormas([])].join(' / '), 'Pix / Pix ou Dinheiro / Pix, Débito, Crédito ou Dinheiro / ');
+    var negP = { formas: ['pix', 'credito'], pix: 'chave@exemplo.com', obs: 'Padrão' };
+    var dP = C.dadosOrcamento(r1, { negocio: negP, numero: 1, data: hoje });
+    var dP2 = C.dadosOrcamento(r1, { negocio: negP, numero: 1, data: hoje, formas: ['dinheiro'], pix: 'outra', obs: 'Só neste' });
+    igual('imagem: pagamento e chave do Meu negócio; o orçamento pode trocar; sem Pix marcado a chave não sai', [dP.pagamento, dP.pix, dP.obs, dP2.pagamento, dP2.pix, dP2.obs].join('|'), 'Pix ou Crédito|chave@exemplo.com|Padrão|Dinheiro||Só neste');
+    igual('imagem: observação vazia neste orçamento fica vazia (não volta ao padrão)', C.dadosOrcamento(r1, { negocio: negP, numero: 1, data: hoje, obs: '' }).obs, '');
+    igual('texto com pagamento, chave Pix e observação', C.textoOrcamento(r1, { numero: 5, prazo: '7 dias úteis', formas: ['credito', 'pix', 'dinheiro'], pix: 'chave@exemplo.com', obs: '50% na aprovação' }).replace(NB, ' '),
+      '*Orçamento Nº 0005 — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*\nPrazo de entrega: 7 dias úteis\nPagamento: Pix, Crédito ou Dinheiro\nChave Pix: chave@exemplo.com\nObs.: 50% na aprovação');
+    igual('texto: chave Pix só com Pix marcado; vazios ficam de fora', [C.textoOrcamento(r1, { formas: ['dinheiro'], pix: 'chave@exemplo.com' }).replace(NB, ' '), C.textoOrcamento(r1, { formas: [], pix: '', obs: ' ' }).replace(NB, ' ')].join(' || '),
+      '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*\nPagamento: Dinheiro || *Orçamento — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
     var txtMat = C.textoOrcamento(r3, { material: 'PETG' }).toLowerCase();
     igual('texto nunca mostra custo nem margem', /custo|margem|lucro|perda/.test(txtMat), false);
 
@@ -175,7 +196,7 @@
     igual('formatarData', C.formatarData(new Date(2026, 10, 14)), '14/11/2026');
     var neg0 = C.lerNegocio(null);
     igual('negócio vazio: validade padrão 7 dias', neg0.validadeDias, 7);
-    igual('negócio vazio: textos vazios', neg0.nome + neg0.whatsapp + neg0.pagamento + neg0.obs, '');
+    igual('negócio vazio: textos vazios, sem formas e sem chave Pix', neg0.nome + neg0.whatsapp + neg0.obs + neg0.pix + neg0.formas.length + ('avisoPagTexto' in neg0), '0false');
     var neg1 = C.lerNegocio({ nome: '  Oficina   do João  ', whatsapp: '(11) 99999-0000', obs: new Array(300).join('x'), validadeDias: 0 });
     igual('negócio: espaços aparados e repetidos juntados', neg1.nome, 'Oficina do João');
     igual('negócio: observação limitada a 160', neg1.obs.length, 160);
@@ -195,7 +216,7 @@
     igual('dados: 3 peças mostram valor por peça', d3.valorPeca.replace(NB, ' ') + ' / ' + d3.total.replace(NB, ' '), 'R$ 2,36 / R$ 7,09');
     igual('dados: validade de 15 dias', d3.validade, '29/11/2026');
     igual('dados: campos preenchidos', [d3.negocioNome, d3.cliente, d3.descricao, d3.material, d3.prazo, d3.pagamento, d3.obs].join('|'),
-      'Oficina X|Maria|Suporte de celular|PETG|5 dias úteis|Pix ou cartão|Garantia de 30 dias');
+      'Oficina X|Maria|Suporte de celular|PETG|5 dias úteis|Pix, Débito ou Crédito|Garantia de 30 dias');
     igual('dados: descrição padrão (3 peças)', C.dadosOrcamento(r3, { numero: 1, data: hoje }).descricao, '3 peças impressas em 3D');
     igual('dados: validade 0 não mostra validade', C.dadosOrcamento(r1, { negocio: { validadeDias: 0 }, numero: 1, data: hoje }).validade, '');
     var rExtra = com({ extrasPeca: 1.5, qtd: 2, energiaHora: 0.114, desgasteHora: 0.7, peso: 40, tempo: 120 });
@@ -203,7 +224,7 @@
     igual('dados (imagem) nunca trazem custo, margem, perda, lucro, energia ou desgaste', /custo|margem|lucro|perda|energia|desgaste/.test(dadosExtra), false);
     var chaves = Object.keys(C.dadosOrcamento(rExtra, { numero: 1 })).sort().join(',');
     igual('dados: só os campos esperados (nenhum campo de custo entra por acidente)', chaves,
-      'cidade,cliente,cnpj,data,descricao,instagram,material,negocioNome,numero,obs,pagamento,prazo,qtd,total,validade,valorPeca,whatsapp');
+      'cidade,cliente,cnpj,data,descricao,instagram,material,negocioNome,numero,obs,pagamento,pix,prazo,qtd,total,validade,valorPeca,whatsapp');
     igual('dados: valores de custo não aparecem em lugar nenhum',
       [rExtra.custoTotal, rExtra.lucro, rExtra.perda, rExtra.custoBase].every(function (v) { return dadosExtra.indexOf(m(v).replace(NB, ' ').toLowerCase()) === -1; }), true);
     igual('texto com nº: título', C.textoOrcamento(r1, { numero: 7 }).replace(NB, ' '), '*Orçamento Nº 0007 — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*');
@@ -989,6 +1010,18 @@
     igual('sem envio: orçar um pedido anotado sem enviar (mesmo registro, mantém o canal do pedido)', [seOrc.vinculado, seOrc.lista.length, seOrc.lista[0].formato, seOrc.lista[0].informado, seOrc.lista[0].canal, seOrc.lista[0].n].join('|'), 'true|1|sem-envio|presencial|whatsapp|96');
     var seCsv = D.gerarCSV([seReg], hojeH).split('\r\n');
     igual('sem envio: planilha mostra "Sem envio (telefone)" na coluna Formato', seCsv[1].split(';')[3], 'Sem envio (telefone)');
+    // 0.6.0-teste.14: o registro guarda pagamento, chave Pix e observação do orçamento; formas do recebimento
+    var pgReg = D.novoRegistro(r1, { numero: 97, formato: 'texto', quando: em(0, 9), formasPag: ['dinheiro', 'pix', 'boleto'], pix: ' chave@exemplo.com ', obs: 'Só neste' });
+    igual('registro: formas na ordem dos chips, chave e observação', [pgReg.formasPag.join('+'), pgReg.pix, pgReg.obs].join('|'), 'pix+dinheiro|chave@exemplo.com|Só neste');
+    var pgLido = D.lerRegistro(JSON.parse(JSON.stringify(pgReg)));
+    igual('registro: pagamento do orçamento lido de volta (backup); registro antigo sem esses campos continua sem eles', [pgLido.formasPag.join('+'), pgLido.pix, pgLido.obs, 'formasPag' in D.lerRegistro(mkReg(1, 0)), 'pix' in D.lerRegistro(mkReg(1, 0))].join('|'), 'pix+dinheiro|chave@exemplo.com|Só neste|false|false');
+    var pgAtu = D.atualizarRegistro([pgReg], D.chaveRegistro(pgReg), { formasPag: ['credito'], pix: '', obs: 'Nova' })[0];
+    igual('registro: reenviar troca pagamento, chave e observação', [pgAtu.formasPag.join('+'), pgAtu.pix, pgAtu.obs].join('|'), 'credito||Nova');
+    var pgV = v6.venda(98, 1, 100, {}), pgK = D.chaveRegistro(pgV);
+    igual('recebimento: Débito e Crédito aceitos; Cartão e Transferência antigos continuam lidos; desconhecida vira Outro',
+      [D.registrarRecebimento([pgV], pgK, { valor: 10, forma: 'debito' })[0].pagamento.recebimentos[0].forma, D.registrarRecebimento([pgV], pgK, { valor: 10, forma: 'credito' })[0].pagamento.recebimentos[0].forma,
+       D.lerPagamento({ condicao: 'entrega', recebimentos: [{ valor: 5, em: v6.iso(1), forma: 'cartao' }, { valor: 5, em: v6.iso(1), forma: 'transferencia' }] }).recebimentos.map(function (x) { return x.forma; }).join('+'),
+       D.registrarRecebimento([pgV], pgK, { valor: 10, forma: 'cartao' })[0].pagamento.recebimentos[0].forma].join('|'), 'debito|credito|cartao+transferencia|outro');
     return resultados;
   }
 

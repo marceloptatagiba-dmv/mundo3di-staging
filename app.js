@@ -40,6 +40,9 @@
     return null;
   }
   var config = carregarConfig();
+  /* Configuração antiga com "Formas de pagamento" em texto: a conversão para chips (e o resto levado para a observação) é gravada
+     na hora, junto com o aviso para conferir em Meu negócio (0.6.0-teste.14) */
+  if (config.negocio.migrouPagamento) { delete config.negocio.migrouPagamento; salvarConfig(config); }
 
   /* Último filamento usado na tela de orçamento (se foi excluído, volta para o padrão) */
   var CHAVE_MAT = CHAVE + '-material';
@@ -318,7 +321,7 @@
   function registrarEnvio(numero, formato, extra) {
     var opcoes = { numero: numero, formato: formato, material: extra.material, cliente: extra.cliente,
       descricao: extra.descricao, entrada: extra.entrada, prazo: extra.prazo, validadeAte: extra.validadeAte, versaoApp: versaoEmUso,
-      catalogoId: pecaVinculada() ? vinculo.id : '', informado: extra.informado };
+      catalogoId: pecaVinculada() ? vinculo.id : '', informado: extra.informado, formasPag: extra.formasPag, pix: extra.pix, obs: extra.obs };
     var reg = D.novoRegistro(extra.orcamento, opcoes), chave = D.chaveRegistro(reg);
     try {
       localStorage.setItem(CHAVE_CONT, String(numero));
@@ -343,9 +346,51 @@
     var m = reg.formato === 'sem-envio' ? { formato: extra.formato, cliente: extra.cliente } : { reenvios: (reg.reenvios || 0) + 1, cliente: extra.cliente };
     if (extra.descricao !== undefined) m.descricao = extra.descricao;      // texto e imagem levam descrição e prazo (desde o 0.6.0-teste.13)
     if (extra.prazo !== undefined) m.prazo = extra.prazo;
+    if (extra.formasPag !== undefined) { m.formasPag = extra.formasPag; m.pix = extra.pix; m.obs = extra.obs; }
     gravarLista(D.atualizarRegistro(lerLista(), D.chaveRegistro(reg), m));
     if (!$('tela-hist').hidden) desenharHist();
   }
+
+  /* ---------- Pagamento e observação deste orçamento (0.6.0-teste.14) ----------
+     Vem de Meu negócio (ou do registro, no reenvio) e pode ser trocado só para este orçamento. Recolhido, com o resumo. */
+  var envPag = { formas: [], pix: '', obs: '' }, envPagPadrao = envPag;
+  function pagDoNegocio() { var n = config.negocio; return { formas: n.formas.slice(), pix: n.pix, obs: n.obs }; }
+  function prepararPagEnvio(reg) {
+    envPagPadrao = pagDoNegocio();
+    envPag = reg && Array.isArray(reg.formasPag) ? { formas: reg.formasPag.slice(), pix: reg.pix || '', obs: reg.obs || '' } : pagDoNegocio();
+    $('env-pix').value = envPag.pix; $('env-obs').value = envPag.obs;
+    mostrarPagEnvio(false);
+  }
+  function pagMudou() { return envPag.formas.join() !== envPagPadrao.formas.join() || envPag.pix.trim() !== envPagPadrao.pix || envPag.obs.trim() !== envPagPadrao.obs; }
+  function desenharPagEnvio() {
+    var temPix = envPag.formas.indexOf('pix') !== -1, partes = [envPag.formas.length ? C.fraseFormas(envPag.formas) : 'Sem formas de pagamento'];
+    if (temPix && envPag.pix.trim()) partes.push('Pix: ' + envPag.pix.trim());
+    if (envPag.obs.trim()) partes.push('Obs.: ' + envPag.obs.trim());
+    $('pg-resumo').textContent = partes.join(' · ');
+    desenharChipsFormas($('env-formas'), envPag.formas);
+    $('env-pix-campo').hidden = !temPix;
+    var mudou = pagMudou();
+    $('pg-selo').hidden = !mudou; $('pg-padrao').hidden = !mudou;
+  }
+  function mostrarPagEnvio(abrir) {
+    $('pg-painel').hidden = !abrir;
+    $('pg-abrir').setAttribute('aria-expanded', String(!!abrir));
+    $('pg-acao').textContent = abrir ? 'Fechar' : 'Alterar';
+    desenharPagEnvio();
+  }
+  /* O que vai no orçamento: limpo (formas válidas; chave e observação aparadas) */
+  function pagParaEnvio() { return { formasPag: C.lerFormas(envPag.formas), pix: D.limparTexto(envPag.pix, 77), obs: D.limparTexto(envPag.obs, 160) }; }
+  $('pg-abrir').addEventListener('click', function () { mostrarPagEnvio($('pg-painel').hidden); });
+  Array.prototype.forEach.call($('env-formas').querySelectorAll('[data-fp]'), function (b) {
+    b.addEventListener('click', function () { envPag.formas = alternarForma(envPag.formas, b.dataset.fp); desenharPagEnvio(); agendarImagem(); });
+  });
+  $('env-pix').addEventListener('input', function () { envPag.pix = $('env-pix').value; desenharPagEnvio(); agendarImagem(); });
+  $('env-obs').addEventListener('input', function () { envPag.obs = $('env-obs').value; desenharPagEnvio(); agendarImagem(); });
+  $('pg-padrao').addEventListener('click', function () {
+    envPag = { formas: envPagPadrao.formas.slice(), pix: envPagPadrao.pix, obs: envPagPadrao.obs };
+    $('env-pix').value = envPag.pix; $('env-obs').value = envPag.obs;
+    desenharPagEnvio(); agendarImagem();
+  });
 
   /* ---------- Enviar orçamento: painel com Texto ou Imagem ---------- */
   var pedidoVinculo = null;   // pedido que está sendo orçado: { chave, cliente, descricao }
@@ -384,6 +429,7 @@
     $('folha-rotulo').textContent = envioReg && envioReg.formato !== 'sem-envio' ? 'Reenviar orçamento' : 'Enviar orçamento';
     $('se-abrir').hidden = !!envioReg;          // registrar sem enviar só existe para orçamento novo
     seInformado = ''; $('se-aprovado').checked = false; mostrarSemEnvio(false);
+    prepararPagEnvio(envioReg);
     $('folha-numero').textContent = 'Nº ' + C.formatarNumero(numeroEnvio());
     desenharChipsClientes();
     descartarImagem();
@@ -399,11 +445,12 @@
   /* Texto: compartilhamento nativo; sem suporte (ou erro), abre o WhatsApp */
   $('enviar-texto').addEventListener('click', function () {
     var reg = envioReg, numero = numeroEnvio(), orc = orcamentoEnvio(), entrada = reg ? null : entradaAtual();
-    var cliente = D.limparTexto(eCliente.value, 60), descricao = D.limparTexto(eImgDesc.value, 120), prazo = D.limparTexto(eImgPrazo.value, 40);
-    var texto = C.textoOrcamento(orc, { material: nomeFilamentoEnvio(), numero: numero, negocio: config.negocio.nome, descricao: descricao, prazo: prazo });
+    var cliente = D.limparTexto(eCliente.value, 60), descricao = D.limparTexto(eImgDesc.value, 120), prazo = D.limparTexto(eImgPrazo.value, 40), pg = pagParaEnvio();
+    var texto = C.textoOrcamento(orc, { material: nomeFilamentoEnvio(), numero: numero, negocio: config.negocio.nome, descricao: descricao, prazo: prazo,
+      formas: pg.formasPag, pix: pg.pix, obs: pg.obs });
     var registrar = function () {
-      if (reg) registrarReenvio(reg, { formato: 'texto', cliente: cliente, descricao: descricao, prazo: prazo });
-      else registrarEnvio(numero, 'texto', { orcamento: orc, material: nomeFilamentoEnvio(), cliente: cliente, descricao: descricao, prazo: prazo, entrada: entrada });
+      if (reg) registrarReenvio(reg, Object.assign({ formato: 'texto', cliente: cliente, descricao: descricao, prazo: prazo }, pg));
+      else registrarEnvio(numero, 'texto', Object.assign({ orcamento: orc, material: nomeFilamentoEnvio(), cliente: cliente, descricao: descricao, prazo: prazo, entrada: entrada }, pg));
     };
     fecharFolha();
     if (navigator.share) {
@@ -430,7 +477,8 @@
   function dadosDaImagem(numero, datas) {
     return C.dadosOrcamento(orcamentoEnvio(), {
       negocio: config.negocio, numero: numero, data: datas.data, validadeAte: datas.validadeAte, material: nomeFilamentoEnvio(),
-      cliente: eCliente.value, descricao: eImgDesc.value, prazo: eImgPrazo.value
+      cliente: eCliente.value, descricao: eImgDesc.value, prazo: eImgPrazo.value,
+      formas: envPag.formas, pix: envPag.pix, obs: envPag.obs
     });
   }
   function prepararImagem() {
@@ -488,7 +536,7 @@
     if (envioReg) return;
     var numero = numeroEnvio(), orc = orcamentoEnvio(), aprovar = $('se-aprovado').checked;
     var extra = { orcamento: orc, material: nomeFilamentoEnvio(), cliente: D.limparTexto(eCliente.value, 60), descricao: D.limparTexto(eImgDesc.value, 120),
-      prazo: D.limparTexto(eImgPrazo.value, 40), validadeAte: datasEnvio().validadeAte, entrada: entradaAtual(), informado: seInformado, semAviso: aprovar };
+      prazo: D.limparTexto(eImgPrazo.value, 40), validadeAte: datasEnvio().validadeAte, formasPag: pagParaEnvio().formasPag, pix: pagParaEnvio().pix, obs: pagParaEnvio().obs, entrada: entradaAtual(), informado: seInformado, semAviso: aprovar };
     fecharFolha();
     var chave = registrarEnvio(numero, 'sem-envio', extra);
     if (!aprovar) return;
@@ -508,6 +556,7 @@
     var reg = envioReg, orc = orcamentoEnvio(), entrada = reg ? null : entradaAtual();
     var extra = { orcamento: orc, formato: 'imagem', material: nomeFilamentoEnvio(), cliente: D.limparTexto(eCliente.value, 60),
       descricao: D.limparTexto(eImgDesc.value, 120), prazo: D.limparTexto(eImgPrazo.value, 40), validadeAte: img.validadeAte, entrada: entrada };
+    Object.assign(extra, pagParaEnvio());
     var gravar = function () { if (reg) registrarReenvio(reg, extra); else registrarEnvio(img.numero, 'imagem', extra); };
     var registrar = function () { gravar(); fecharFolha(); };
     if (navigator.canShare && navigator.canShare({ files: [img.arquivo] })) {
@@ -535,7 +584,31 @@
       cVida = $('cfg-vida'), cHorasAno = $('cfg-horas-ano'), cManut = $('cfg-manut');
   var modoEdicao = 'simples';
   var cNeg = { nome: $('neg-nome'), whatsapp: $('neg-whatsapp'), instagram: $('neg-instagram'), cidade: $('neg-cidade'),
-    cnpj: $('neg-cnpj'), prazo: $('neg-prazo'), pagamento: $('neg-pagamento'), obs: $('neg-obs') };
+    cnpj: $('neg-cnpj'), prazo: $('neg-prazo'), obs: $('neg-obs'), pix: $('neg-pix') };
+  var negFormas = [];       // chips de Formas de pagamento em Meu negócio (o que está na tela, ainda sem salvar)
+  function desenharChipsFormas(box, formas) {
+    Array.prototype.forEach.call(box.querySelectorAll('[data-fp]'), function (b) { b.setAttribute('aria-pressed', String(formas.indexOf(b.dataset.fp) !== -1)); });
+  }
+  function alternarForma(formas, f) { var n = formas.slice(), i = n.indexOf(f); if (i === -1) n.push(f); else n.splice(i, 1); return C.lerFormas(n); }
+  function desenharFormasNegocio() {
+    desenharChipsFormas($('neg-formas'), negFormas);
+    $('neg-pix-campo').hidden = negFormas.indexOf('pix') === -1;
+  }
+  Array.prototype.forEach.call($('neg-formas').querySelectorAll('[data-fp]'), function (b) {
+    b.addEventListener('click', function () { negFormas = alternarForma(negFormas, b.dataset.fp); desenharFormasNegocio(); });
+  });
+  function desenharAvisoPagamento() {
+    var n = config.negocio, tem = !!n.avisoPagTexto;
+    $('neg-aviso-pag').hidden = !tem;
+    if (!tem) return;
+    var marcadas = n.formas.length ? 'Marcamos ' + C.fraseFormas(n.formas).replace(' ou ', ' e ') : 'Nenhuma forma foi reconhecida';
+    $('neg-aviso-pag-txt').textContent = 'Antes estava escrito “' + n.avisoPagTexto + '”. ' + marcadas +
+      (n.avisoPagResto ? ' e levamos “' + n.avisoPagResto + '” para a observação.' : '.') + ' Confira.';
+  }
+  $('neg-aviso-pag-fechar').addEventListener('click', function () {
+    delete config.negocio.avisoPagTexto; delete config.negocio.avisoPagResto;
+    salvarConfig(config); desenharAvisoPagamento();
+  });
   var cValidade = $('neg-validade');
   /* WhatsApp: formata como (xx) xxxx-xxxx enquanto digita, mantendo o cursor no mesmo dígito */
   (function () {
@@ -630,6 +703,7 @@
   /* ---------- Meu negócio e logo ---------- */
   function preencherNegocio(n) {
     Object.keys(cNeg).forEach(function (k) { cNeg[k].value = n[k]; });
+    negFormas = n.formas.slice(); desenharFormasNegocio(); desenharAvisoPagamento();
     cValidade.value = String(n.validadeDias);
     logoPendente = undefined;
     mostrarLogo(lerLogoSalvo());
@@ -644,6 +718,7 @@
     var n = {};
     Object.keys(cNeg).forEach(function (k) { n[k] = cNeg[k].value; });
     n.validadeDias = C.lerInteiro(cValidade.value);
+    n.formas = negFormas.slice();
     return C.lerNegocio(n);
   }
   $('cfg-logo-escolher').addEventListener('click', function () { $('cfg-logo-arq').click(); });
@@ -1219,7 +1294,7 @@
     $('det-excluir').textContent = 'Excluir';
   }
   /* Pagamento (de Aprovado a Entregue): etiqueta calculada, condição, recebimentos e botão para registrar */
-  var FORMA_ROT = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão', transferencia: 'Transferência', outro: 'Outro', estorno: 'Devolvido' };
+  var FORMA_ROT = { pix: 'Pix', debito: 'Débito', credito: 'Crédito', dinheiro: 'Dinheiro', cartao: 'Cartão', transferencia: 'Transferência', outro: 'Outro', estorno: 'Devolvido' };
   function desenharPagamento(reg) {
     var pg = D.situacaoPagamento(reg);
     mostrarSo('det-bloco-pag', !!pg.estado);
