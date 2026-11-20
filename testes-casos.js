@@ -113,6 +113,15 @@
       '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\nMaterial: PETG\n*Valor: R$ 2,36*');
     igual('texto com material (3 peças)', C.textoOrcamento(r3, { material: 'PETG' }).replace(NB, ' '),
       '*Orçamento — Mundo 3Di*\n3 peças impressas em 3D\nMaterial: PETG\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
+    // 0.6.0-teste.13: descrição e prazo também no texto
+    igual('texto com descrição e prazo (1 peça)', C.textoOrcamento(r1, { numero: 3, descricao: ' Miniatura do  Jason ', prazo: '5 dias úteis' }).replace(NB, ' '),
+      '*Orçamento Nº 0003 — Mundo 3Di*\nMiniatura do Jason\n*Valor: R$ 2,36*\nPrazo de entrega: 5 dias úteis');
+    igual('texto com descrição, material e prazo (3 peças)', C.textoOrcamento(r3, { descricao: 'Chaveiro com logo', material: 'PETG', prazo: '1 semana' }).replace(NB, ' '),
+      '*Orçamento — Mundo 3Di*\n3 peças · Chaveiro com logo\nMaterial: PETG\nValor por peça: R$ 2,36\n*Total: R$ 7,09*\nPrazo de entrega: 1 semana');
+    igual('texto: descrição e prazo vazios (ou só espaços) ficam de fora', C.textoOrcamento(r1, { descricao: '  ', prazo: '' }).replace(NB, ' ') + '|' + C.textoOrcamento(r3, { prazo: ' ' }).replace(NB, ' '),
+      '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*|*Orçamento — Mundo 3Di*\n3 peças impressas em 3D\nValor por peça: R$ 2,36\n*Total: R$ 7,09*');
+    igual('texto: só prazo, sem descrição', C.textoOrcamento(r1, { prazo: 'amanhã' }).replace(NB, ' '), '*Orçamento — Mundo 3Di*\nPeça impressa em 3D\n*Valor: R$ 2,36*\nPrazo de entrega: amanhã');
+    igual('texto com descrição e prazo nunca mostra custo nem margem', /custo|margem|lucro|perda/i.test(C.textoOrcamento(r3, { descricao: 'Vaso', prazo: '3 dias', material: 'PLA' })), false);
     var txtMat = C.textoOrcamento(r3, { material: 'PETG' }).toLowerCase();
     igual('texto nunca mostra custo nem margem', /custo|margem|lucro|perda/.test(txtMat), false);
 

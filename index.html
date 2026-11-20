@@ -1140,10 +1140,24 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
       <span class="caixa texto"><input id="env-cliente" type="text" maxlength="60" autocomplete="off" placeholder="Nome do cliente"></span>
     </label>
     <div class="chips clientes" id="env-clientes" hidden></div>
-    <p class="ajuda neutra" id="env-ajuda">Vale para texto e imagem. Fica guardado só no seu histórico; o texto enviado ao cliente não muda.</p>
+    <!-- Desde o 0.6.0-teste.13: descrição e prazo valem para Texto, Imagem e Registrar sem enviar (ficam acima dos botões: tocar em Texto já envia) -->
+    <label class="campo"><span>Descrição da peça (opcional)</span>
+      <span class="caixa texto"><input id="img-descricao" type="text" maxlength="120" autocomplete="off" placeholder="Peça impressa em 3D"></span>
+    </label>
+    <label class="campo"><span>Prazo de entrega</span>
+      <span class="caixa texto"><input id="img-prazo" type="text" maxlength="40" autocomplete="off" placeholder="Ex.: 5 dias úteis"></span>
+    </label>
+    <p class="ajuda neutra" id="env-ajuda">Descrição e prazo vão no texto e na imagem. Vazios, ficam de fora. O cliente fica só no seu histórico (e aparece na imagem).</p>
     <div class="grade2">
       <button class="btn grande" type="button" id="enviar-texto">Texto</button>
       <button class="btn grande" type="button" id="abrir-imagem" aria-pressed="false">Imagem</button>
+    </div>
+    <div class="bloco" id="painel-imagem" hidden>
+      <div class="previa">
+        <img id="img-previa" alt="Pré-visualização do orçamento" hidden>
+        <span class="ajuda neutra" id="img-estado">Preparando a imagem…</span>
+      </div>
+      <button class="btn principal" type="button" id="enviar-imagem" disabled>Enviar imagem</button>
     </div>
     <!-- Orçamento informado pessoalmente ou por telefone: grava como Orçado, com Nº e validade, sem compartilhar -->
     <button class="se-abrir" type="button" id="se-abrir" aria-expanded="false" aria-controls="painel-sem-envio">
@@ -1161,19 +1175,6 @@ body.com-abas .barra{bottom:calc(64px + env(safe-area-inset-bottom))}
       <label class="marcar"><input type="checkbox" id="se-aprovado"><span>Já aprovado pelo cliente</span></label>
       <button class="btn principal" type="button" id="se-registrar">Registrar orçamento</button>
       <p class="ajuda neutra">Fica em Pedidos como Orçado, com Nº e validade. Dá para enviar depois pelo WhatsApp, com o mesmo Nº.</p>
-    </div>
-    <div class="bloco" id="painel-imagem" hidden>
-      <label class="campo"><span>Descrição da peça (opcional)</span>
-        <span class="caixa texto"><input id="img-descricao" type="text" maxlength="120" autocomplete="off" placeholder="Peça impressa em 3D"></span>
-      </label>
-      <label class="campo"><span>Prazo de entrega</span>
-        <span class="caixa texto"><input id="img-prazo" type="text" maxlength="40" autocomplete="off"></span>
-      </label>
-      <div class="previa">
-        <img id="img-previa" alt="Pré-visualização do orçamento" hidden>
-        <span class="ajuda neutra" id="img-estado">Preparando a imagem…</span>
-      </div>
-      <button class="btn principal" type="button" id="enviar-imagem" disabled>Enviar imagem</button>
     </div>
   </div>
 </div>

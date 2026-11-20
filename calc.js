@@ -360,22 +360,26 @@
 
   /* Texto do orçamento para enviar ao cliente (não revela custo nem margem).
      opcoes.material: nome do filamento — só entra no texto se vier preenchido (opção "Mostrar filamento no orçamento").
-     opcoes.numero: nº do orçamento (inteiro) · opcoes.negocio: nome do negócio (vazio = Mundo 3Di). */
+     opcoes.numero: nº do orçamento (inteiro) · opcoes.negocio: nome do negócio (vazio = Mundo 3Di).
+     opcoes.descricao: descrição da peça (vazia = "Peça impressa em 3D") · opcoes.prazo: prazo de entrega (vazio = sem a linha). Desde o 0.6.0-teste.13. */
   function textoOrcamento(r, opcoes) {
     var material = opcoes && opcoes.material ? String(opcoes.material).trim() : '';
+    var descricao = opcoes && opcoes.descricao ? String(opcoes.descricao).replace(/\s+/g, ' ').trim() : '';
+    var prazo = opcoes && opcoes.prazo ? String(opcoes.prazo).replace(/\s+/g, ' ').trim() : '';
     var negocio = opcoes && opcoes.negocio ? String(opcoes.negocio).trim() : '';
     var numero = opcoes && opcoes.numero > 0 ? ' Nº ' + formatarNumero(opcoes.numero) : '';
     var linhas = ['*Orçamento' + numero + ' — ' + (negocio || NOME_PADRAO) + '*'];
     if (r.qtd > 1) {
-      linhas.push(r.qtd + ' peças impressas em 3D');
+      linhas.push(descricao ? r.qtd + ' peças · ' + descricao : r.qtd + ' peças impressas em 3D');
       if (material) linhas.push('Material: ' + material);
       linhas.push('Valor por peça: ' + moeda(r.valorUnitario));
       linhas.push('*Total: ' + moeda(r.valorCobrar) + '*');
     } else {
-      linhas.push('Peça impressa em 3D');
+      linhas.push(descricao || 'Peça impressa em 3D');
       if (material) linhas.push('Material: ' + material);
       linhas.push('*Valor: ' + moeda(r.valorCobrar) + '*');
     }
+    if (prazo) linhas.push('Prazo de entrega: ' + prazo);
     return linhas.join('\n');
   }
 

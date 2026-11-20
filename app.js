@@ -341,7 +341,8 @@
   function registrarReenvio(reg, extra) {
     /* Orçamento registrado sem enviar: o primeiro envio troca o formato (Texto ou Imagem) e não conta como reenvio */
     var m = reg.formato === 'sem-envio' ? { formato: extra.formato, cliente: extra.cliente } : { reenvios: (reg.reenvios || 0) + 1, cliente: extra.cliente };
-    if (extra.formato === 'imagem') { m.descricao = extra.descricao; m.prazo = extra.prazo; }
+    if (extra.descricao !== undefined) m.descricao = extra.descricao;      // texto e imagem levam descrição e prazo (desde o 0.6.0-teste.13)
+    if (extra.prazo !== undefined) m.prazo = extra.prazo;
     gravarLista(D.atualizarRegistro(lerLista(), D.chaveRegistro(reg), m));
     if (!$('tela-hist').hidden) desenharHist();
   }
@@ -398,11 +399,11 @@
   /* Texto: compartilhamento nativo; sem suporte (ou erro), abre o WhatsApp */
   $('enviar-texto').addEventListener('click', function () {
     var reg = envioReg, numero = numeroEnvio(), orc = orcamentoEnvio(), entrada = reg ? null : entradaAtual();
-    var cliente = D.limparTexto(eCliente.value, 60);
-    var texto = C.textoOrcamento(orc, { material: nomeFilamentoEnvio(), numero: numero, negocio: config.negocio.nome });
+    var cliente = D.limparTexto(eCliente.value, 60), descricao = D.limparTexto(eImgDesc.value, 120), prazo = D.limparTexto(eImgPrazo.value, 40);
+    var texto = C.textoOrcamento(orc, { material: nomeFilamentoEnvio(), numero: numero, negocio: config.negocio.nome, descricao: descricao, prazo: prazo });
     var registrar = function () {
-      if (reg) registrarReenvio(reg, { formato: 'texto', cliente: cliente });
-      else registrarEnvio(numero, 'texto', { orcamento: orc, material: nomeFilamentoEnvio(), cliente: cliente, entrada: entrada });
+      if (reg) registrarReenvio(reg, { formato: 'texto', cliente: cliente, descricao: descricao, prazo: prazo });
+      else registrarEnvio(numero, 'texto', { orcamento: orc, material: nomeFilamentoEnvio(), cliente: cliente, descricao: descricao, prazo: prazo, entrada: entrada });
     };
     fecharFolha();
     if (navigator.share) {
@@ -487,7 +488,7 @@
     if (envioReg) return;
     var numero = numeroEnvio(), orc = orcamentoEnvio(), aprovar = $('se-aprovado').checked;
     var extra = { orcamento: orc, material: nomeFilamentoEnvio(), cliente: D.limparTexto(eCliente.value, 60), descricao: D.limparTexto(eImgDesc.value, 120),
-      validadeAte: datasEnvio().validadeAte, entrada: entradaAtual(), informado: seInformado, semAviso: aprovar };
+      prazo: D.limparTexto(eImgPrazo.value, 40), validadeAte: datasEnvio().validadeAte, entrada: entradaAtual(), informado: seInformado, semAviso: aprovar };
     fecharFolha();
     var chave = registrarEnvio(numero, 'sem-envio', extra);
     if (!aprovar) return;
